@@ -10,7 +10,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { formatTime } from '@/utils/format';
 
 const MINUTE_ITEMS = Array.from({ length: 11 }, (_, i) => String(i));
-const SECOND_ITEMS = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
+const SECOND_ITEMS = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
 
 type RestTimePickerProps = {
   visible: boolean;
@@ -55,7 +55,7 @@ function PickerSheet({ valueSeconds, onConfirm, onCancel }: PickerSheetProps) {
   const [minutes, setMinutes] = useState(
     Math.min(MINUTE_ITEMS.length - 1, Math.floor(valueSeconds / 60)),
   );
-  const [seconds, setSeconds] = useState(Math.round((valueSeconds % 60) / 5) * 5);
+  const [seconds, setSeconds] = useState(valueSeconds % 60);
 
   const handleConfirm = () => {
     onConfirm(minutes * 60 + seconds);

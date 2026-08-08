@@ -1,20 +1,41 @@
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { ExerciseRow } from '@/components/exercise-row';
-import { ThemedText } from '@/components/themed-text';
-import { Button } from '@/components/ui/button';
-import { useWorkout } from '@/context/workout-context';
-import { BottomTabInset, MaxContentWidth, Radius, Spacing, TopInset } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+import { ExerciseRow } from "@/components/exercise-row";
+import { ThemedText } from "@/components/themed-text";
+import { Button } from "@/components/ui/button";
+import {
+  BottomTabInset,
+  MaxContentWidth,
+  Radius,
+  Spacing,
+  TopInset,
+} from "@/constants/theme";
+import { useWorkout } from "@/context/workout-context";
+import { useTheme } from "@/hooks/use-theme";
 
 export default function RoutineScreen() {
-  const { routine, updateRoutineName, addExercise, removeExercise, updateExercise, restoreRoutine } =
-    useWorkout();
+  const {
+    routine,
+    updateRoutineName,
+    addExercise,
+    removeExercise,
+    updateExercise,
+    restoreRoutine,
+  } = useWorkout();
   const theme = useTheme();
   const safeAreaInsets = useSafeAreaInsets();
 
-  const totalSets = routine.exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
+  const totalSets = routine.exercises.reduce(
+    (sum, exercise) => sum + exercise.sets,
+    0,
+  );
 
   const insets = {
     top: safeAreaInsets.top + TopInset,
@@ -27,7 +48,8 @@ export default function RoutineScreen() {
       contentContainerStyle={[
         styles.contentContainer,
         { paddingTop: insets.top, paddingBottom: insets.bottom },
-      ]}>
+      ]}
+    >
       <View style={styles.container}>
         <View style={styles.header}>
           <ThemedText type="caps" themeColor="textSecondary">
@@ -41,7 +63,8 @@ export default function RoutineScreen() {
             style={[styles.nameInput, { color: theme.text }]}
           />
           <ThemedText type="small" themeColor="textSecondary">
-            {routine.exercises.length} {routine.exercises.length === 1 ? 'ejercicio' : 'ejercicios'} ·{' '}
+            {routine.exercises.length}{" "}
+            {routine.exercises.length === 1 ? "ejercicio" : "ejercicios"} ·{" "}
             {totalSets} series
           </ThemedText>
         </View>
@@ -58,7 +81,11 @@ export default function RoutineScreen() {
 
           {routine.exercises.length === 0 && (
             <View style={[styles.empty, { borderColor: theme.border }]}>
-              <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
+              <ThemedText
+                type="small"
+                themeColor="textSecondary"
+                style={styles.centerText}
+              >
                 Aún no tienes ejercicios. Agrega el primero para empezar.
               </ThemedText>
             </View>
@@ -71,8 +98,12 @@ export default function RoutineScreen() {
               styles.addButton,
               { borderColor: theme.accent },
               pressed && styles.pressed,
-            ]}>
-            <ThemedText type="smallBold" style={{ color: theme.accent, fontSize: 18 }}>
+            ]}
+          >
+            <ThemedText
+              type="smallBold"
+              style={{ color: theme.accent, fontSize: 18 }}
+            >
               +
             </ThemedText>
             <ThemedText type="smallBold" style={{ color: theme.accent }}>
@@ -97,15 +128,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.four,
+    flexDirection: "row",
+    justifyContent: "center",
+    paddingHorizontal: Spacing.five,
   },
   container: {
     flex: 1,
     maxWidth: MaxContentWidth,
     flexGrow: 1,
     gap: Spacing.four,
+    paddingTop: 40,
   },
   header: {
     gap: Spacing.two,
@@ -121,23 +153,23 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   empty: {
-    alignItems: 'center',
+    alignItems: "center",
     borderWidth: 1,
-    borderStyle: 'dashed',
+    borderStyle: "dashed",
     borderRadius: Radius.lg,
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.five,
   },
   centerText: {
-    textAlign: 'center',
+    textAlign: "center",
   },
   addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: Spacing.two,
     borderWidth: 1.5,
-    borderStyle: 'dashed',
+    borderStyle: "dashed",
     borderRadius: Radius.lg,
     paddingVertical: Spacing.three,
   },

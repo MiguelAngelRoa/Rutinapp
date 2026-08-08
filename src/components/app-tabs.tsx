@@ -1,31 +1,26 @@
-import { NativeTabs } from 'expo-router/unstable-native-tabs';
-import { useColorScheme } from 'react-native';
+import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
+import { useColorScheme } from "react-native";
 
-import { Colors } from '@/constants/theme';
+import { Colors } from "@/constants/theme";
 
 export default function AppTabs() {
   const scheme = useColorScheme();
-  const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
+  const colors = Colors[scheme === "dark" ? "dark" : "light"];
 
   return (
     <NativeTabs
       backgroundColor={colors.background}
-      indicatorColor={colors.accent}
-      labelStyle={{ selected: { color: colors.accent } }}>
+      labelStyle={{ selected: { color: colors.accent } }}
+      iconColor={{ default: colors.textSecondary, selected: colors.accent }}
+    >
       <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Label>Entrenar</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          src={require('@/assets/images/tabIcons/home.png')}
-          renderingMode="template"
-        />
+        <Label>Entrenar</Label>
+        <Icon src={require("@/assets/images/tabIcons/home.png")} />
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="explore">
-        <NativeTabs.Trigger.Label>Rutina</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          src={require('@/assets/images/tabIcons/explore.png')}
-          renderingMode="template"
-        />
+        <Label>Rutina</Label>
+        <Icon src={require("@/assets/images/tabIcons/explore.png")} />
       </NativeTabs.Trigger>
     </NativeTabs>
   );

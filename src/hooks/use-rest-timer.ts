@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export type RestPhase = 'idle' | 'resting' | 'finished';
 
@@ -15,22 +15,22 @@ export function useRestTimer() {
     };
   }, []);
 
-  const start = (durationSeconds: number) => {
+  const start = useCallback((durationSeconds: number) => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
     }
     setEndTime(Date.now() + durationSeconds * 1000);
     setNow(Date.now());
     intervalRef.current = setInterval(() => setNow(Date.now()), 250);
-  };
+  }, []);
 
-  const stop = () => {
+  const stop = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
     setEndTime(null);
-  };
+  }, []);
 
   const phase: RestPhase = endTime == null ? 'idle' : now >= endTime ? 'finished' : 'resting';
   const remainingSeconds = endTime == null ? 0 : Math.max(0, Math.ceil((endTime - now) / 1000));

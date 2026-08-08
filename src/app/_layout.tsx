@@ -1,9 +1,9 @@
-import { DarkTheme, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
+import { DarkTheme, ThemeProvider } from "@react-navigation/native";
+import * as SplashScreen from "expo-splash-screen";
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
-import { WorkoutProvider } from '@/context/workout-context';
+import { AnimatedSplashOverlay } from "@/components/animated-icon";
+import AppTabs from "@/components/app-tabs";
+import { WorkoutProvider } from "@/context/workout-context";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -11,12 +11,12 @@ const AppTheme = {
   ...DarkTheme,
   colors: {
     ...DarkTheme.colors,
-    primary: '#A3E635',
-    background: '#000000',
-    card: '#000000',
-    text: '#FFFFFF',
-    border: '#4A4A52',
-    notification: '#A3E635',
+    primary: "#A3E635",
+    background: "#000000",
+    card: "#000000",
+    text: "#FFFFFF",
+    border: "#4A4A52",
+    notification: "#A3E635",
   },
 };
 
