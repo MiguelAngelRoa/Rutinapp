@@ -1,6 +1,6 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * Rutinapp design system: black & citrus theme.
+ * Colors are defined for light and dark mode.
  */
 
 import '@/global.css';
@@ -9,18 +9,41 @@ import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    /** App background: black */
+    background: '#000000',
+    /** Cards and surfaces: dark charcoal */
+    backgroundElement: '#16161C',
+    /** Pressed / selected surfaces */
+    backgroundSelected: '#232329',
+    /** Primary text: white */
+    text: '#FFFFFF',
+    /** Secondary text: light gray */
+    textSecondary: '#9CA3AF',
+    /** Brand citrus lime (black text has strong contrast) */
+    accent: '#A3E635',
+    /** Soft lime tint for chips, fills and tracks */
+    accentSoft: '#1F2B10',
+    /** Text on top of accent surfaces */
+    onAccent: '#000000',
+    /** Hairline borders: medium white-gray */
+    border: '#4A4A52',
+    /** Positive feedback (rest finished, workout done) */
+    success: '#4ADE80',
+    /** Soft green tint for finished states */
+    successSoft: '#12331E',
   },
   dark: {
-    text: '#ffffff',
     background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    backgroundElement: '#16161C',
+    backgroundSelected: '#232329',
+    text: '#FFFFFF',
+    textSecondary: '#9CA3AF',
+    accent: '#A3E635',
+    accentSoft: '#1F2B10',
+    onAccent: '#000000',
+    border: '#4A4A52',
+    success: '#4ADE80',
+    successSoft: '#12331E',
   },
 } as const;
 
@@ -60,6 +83,33 @@ export const Spacing = {
   five: 32,
   six: 64,
 } as const;
+
+export const Radius = {
+  sm: 6,
+  md: 10,
+  lg: 12,
+  xl: 16,
+  full: 999,
+} as const;
+
+export const Shadow = Platform.select({
+  ios: {
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+  },
+  android: {
+    elevation: 3,
+  },
+  web: {
+    boxShadow: '0 8px 28px rgba(11, 36, 71, 0.10)',
+  },
+  default: {},
+});
+
+/** Extra top space on web so content clears the floating tab bar. */
+export const TopInset = Platform.select({ web: 88, default: 0 }) ?? 0;
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
 export const MaxContentWidth = 800;

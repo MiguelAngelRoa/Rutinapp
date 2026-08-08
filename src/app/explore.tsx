@@ -1,126 +1,93 @@
-import { Image } from 'expo-image';
-import { SymbolView } from 'expo-symbols';
-import { Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ExternalLink } from '@/components/external-link';
+import { ExerciseRow } from '@/components/exercise-row';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Collapsible } from '@/components/ui/collapsible';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { Button } from '@/components/ui/button';
+import { useWorkout } from '@/context/workout-context';
+import { BottomTabInset, MaxContentWidth, Radius, Spacing, TopInset } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-export default function TabTwoScreen() {
-  const safeAreaInsets = useSafeAreaInsets();
-  const insets = {
-    ...safeAreaInsets,
-    bottom: safeAreaInsets.bottom + BottomTabInset + Spacing.three,
-  };
+export default function RoutineScreen() {
+  const { routine, updateRoutineName, addExercise, removeExercise, updateExercise, restoreRoutine } =
+    useWorkout();
   const theme = useTheme();
+  const safeAreaInsets = useSafeAreaInsets();
 
-  const contentPlatformStyle = Platform.select({
-    android: {
-      paddingTop: insets.top,
-      paddingLeft: insets.left,
-      paddingRight: insets.right,
-      paddingBottom: insets.bottom,
-    },
-    web: {
-      paddingTop: Spacing.six,
-      paddingBottom: Spacing.four,
-    },
-  });
+  const totalSets = routine.exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
+
+  const insets = {
+    top: safeAreaInsets.top + TopInset,
+    bottom: safeAreaInsets.bottom + BottomTabInset + Spacing.four,
+  };
 
   return (
     <ScrollView
       style={[styles.scrollView, { backgroundColor: theme.background }]}
-      contentInset={insets}
-      contentContainerStyle={[styles.contentContainer, contentPlatformStyle]}>
-      <ThemedView style={styles.container}>
-        <ThemedView style={styles.titleContainer}>
-          <ThemedText type="subtitle">Explore</ThemedText>
-          <ThemedText style={styles.centerText} themeColor="textSecondary">
-            This starter app includes example{'\n'}code to help you get started.
+      contentContainerStyle={[
+        styles.contentContainer,
+        { paddingTop: insets.top, paddingBottom: insets.bottom },
+      ]}>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <ThemedText type="caps" themeColor="textSecondary">
+            Tu rutina
           </ThemedText>
+          <TextInput
+            value={routine.name}
+            onChangeText={updateRoutineName}
+            placeholder="Nombre de la rutina"
+            placeholderTextColor={theme.textSecondary}
+            style={[styles.nameInput, { color: theme.text }]}
+          />
+          <ThemedText type="small" themeColor="textSecondary">
+            {routine.exercises.length} {routine.exercises.length === 1 ? 'ejercicio' : 'ejercicios'} ·{' '}
+            {totalSets} series
+          </ThemedText>
+        </View>
 
-          <ExternalLink href="https://docs.expo.dev" asChild>
-            <Pressable style={({ pressed }) => pressed && styles.pressed}>
-              <ThemedView type="backgroundElement" style={styles.linkButton}>
-                <ThemedText type="link">Expo documentation</ThemedText>
-                <SymbolView
-                  tintColor={theme.text}
-                  name={{ ios: 'arrow.up.right.square', android: 'link', web: 'link' }}
-                  size={12}
-                />
-              </ThemedView>
-            </Pressable>
-          </ExternalLink>
-        </ThemedView>
+        <View style={styles.exercises}>
+          {routine.exercises.map((exercise) => (
+            <ExerciseRow
+              key={exercise.id}
+              exercise={exercise}
+              onChange={(patch) => updateExercise(exercise.id, patch)}
+              onDelete={() => removeExercise(exercise.id)}
+            />
+          ))}
 
-        <ThemedView style={styles.sectionsWrapper}>
-          <Collapsible title="File-based routing">
-            <ThemedText type="small">
-              This app has two screens: <ThemedText type="code">src/app/index.tsx</ThemedText> and{' '}
-              <ThemedText type="code">src/app/explore.tsx</ThemedText>
-            </ThemedText>
-            <ThemedText type="small">
-              The layout file in <ThemedText type="code">src/app/_layout.tsx</ThemedText> sets up
-              the tab navigator.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/router/introduction">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
-
-          <Collapsible title="Android, iOS, and web support">
-            <ThemedView type="backgroundElement" style={styles.collapsibleContent}>
-              <ThemedText type="small">
-                You can open this project on Android, iOS, and the web. To open the web version,
-                press <ThemedText type="smallBold">w</ThemedText> in the terminal running this
-                project.
+          {routine.exercises.length === 0 && (
+            <View style={[styles.empty, { borderColor: theme.border }]}>
+              <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
+                Aún no tienes ejercicios. Agrega el primero para empezar.
               </ThemedText>
-              <Image
-                source={require('@/assets/images/tutorial-web.png')}
-                style={styles.imageTutorial}
-              />
-            </ThemedView>
-          </Collapsible>
+            </View>
+          )}
 
-          <Collapsible title="Images">
-            <ThemedText type="small">
-              For static images, you can use the <ThemedText type="code">@2x</ThemedText> and{' '}
-              <ThemedText type="code">@3x</ThemedText> suffixes to provide files for different
-              screen densities.
+          <Pressable
+            accessibilityRole="button"
+            onPress={addExercise}
+            style={({ pressed }) => [
+              styles.addButton,
+              { borderColor: theme.accent },
+              pressed && styles.pressed,
+            ]}>
+            <ThemedText type="smallBold" style={{ color: theme.accent, fontSize: 18 }}>
+              +
             </ThemedText>
-            <Image source={require('@/assets/images/react-logo.png')} style={styles.imageReact} />
-            <ExternalLink href="https://reactnative.dev/docs/images">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
+            <ThemedText type="smallBold" style={{ color: theme.accent }}>
+              Agregar ejercicio
+            </ThemedText>
+          </Pressable>
+        </View>
 
-          <Collapsible title="Light and dark mode components">
-            <ThemedText type="small">
-              This template has light and dark mode support. The{' '}
-              <ThemedText type="code">useColorScheme()</ThemedText> hook lets you inspect what the
-              user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
-
-          <Collapsible title="Animations">
-            <ThemedText type="small">
-              This template includes an example of an animated component. The{' '}
-              <ThemedText type="code">src/components/ui/collapsible.tsx</ThemedText> component uses
-              the powerful <ThemedText type="code">react-native-reanimated</ThemedText> library to
-              animate opening this hint.
-            </ThemedText>
-          </Collapsible>
-        </ThemedView>
-        {Platform.OS === 'web' && <WebBadge />}
-      </ThemedView>
+        <Button
+          label="Restaurar rutina de ejemplo"
+          variant="ghost"
+          size="md"
+          onPress={restoreRoutine}
+        />
+      </View>
     </ScrollView>
   );
 }
@@ -132,49 +99,49 @@ const styles = StyleSheet.create({
   contentContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
+    paddingHorizontal: Spacing.four,
   },
   container: {
+    flex: 1,
     maxWidth: MaxContentWidth,
     flexGrow: 1,
+    gap: Spacing.four,
   },
-  titleContainer: {
+  header: {
+    gap: Spacing.two,
+  },
+  nameInput: {
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: 700,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+  },
+  exercises: {
     gap: Spacing.three,
+  },
+  empty: {
     alignItems: 'center',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderRadius: Radius.lg,
     paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.six,
+    paddingVertical: Spacing.five,
   },
   centerText: {
     textAlign: 'center',
   },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.two,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderRadius: Radius.lg,
+    paddingVertical: Spacing.three,
+  },
   pressed: {
     opacity: 0.7,
-  },
-  linkButton: {
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
-    borderRadius: Spacing.five,
-    justifyContent: 'center',
-    gap: Spacing.one,
-    alignItems: 'center',
-  },
-  sectionsWrapper: {
-    gap: Spacing.five,
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
-  },
-  collapsibleContent: {
-    alignItems: 'center',
-  },
-  imageTutorial: {
-    width: '100%',
-    aspectRatio: 296 / 171,
-    borderRadius: Spacing.three,
-    marginTop: Spacing.two,
-  },
-  imageReact: {
-    width: 100,
-    height: 100,
-    alignSelf: 'center',
   },
 });
