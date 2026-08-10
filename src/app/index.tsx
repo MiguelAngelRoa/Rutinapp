@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Modal,
   Platform,
@@ -33,10 +33,10 @@ import {
 import { useWorkout } from "@/context/workout-context";
 import { useRestTimer } from "@/hooks/use-rest-timer";
 import { useTheme } from "@/hooks/use-theme";
-import type { Routine } from "@/types/workout";
+import { mondayFirstIndex, type Routine } from "@/types/workout";
 
 export default function TrainScreen() {
-  const { routine } = useWorkout();
+  const { routine, routines, schedule } = useWorkout();
   const [sessionRoutine, setSessionRoutine] = useState<Routine>(routine);
   const [exerciseIndex, setExerciseIndex] = useState(0);
   const [completedSets, setCompletedSets] = useState(0);
@@ -117,6 +117,24 @@ export default function TrainScreen() {
     setDone(false);
     stopRestTimer();
   }, [routine, stopRestTimer]);
+
+  const didAutoLoadRef = useRef(false);
+  useEffect(() => {
+    if (didAutoLoadRef.current) return;
+    didAutoLoadRef.current = true;
+
+    const todayIndex = mondayFirstIndex(new Date().getDay());
+    const todayPlan = schedule[todayIndex];
+    if (todayPlan && !todayPlan.isRest && todayPlan.routineId) {
+      const saved = routines.find((item) => item.id === todayPlan.routineId);
+      if (saved) {
+        setSessionRoutine({
+          name: saved.name,
+          exercises: saved.exercises.map((exercise) => ({ ...exercise })),
+        });
+      }
+    }
+  }, [routines, schedule]);
 
   const completeSet = () => {
     if (exercise == null) return;

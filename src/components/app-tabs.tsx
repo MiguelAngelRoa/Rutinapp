@@ -23,6 +23,11 @@ export default function AppTabs() {
         <Label>Rutina</Label>
         <Icon src={<VectorIcon family={MaterialCommunityIcons} name="clipboard-list-outline" />} />
       </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="schedule">
+        <Label>Agenda</Label>
+        <Icon src={<VectorIcon family={MaterialCommunityIcons} name="calendar-week" />} />
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }

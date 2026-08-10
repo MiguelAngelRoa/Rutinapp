@@ -94,6 +94,7 @@ export function WheelPicker({
 
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (!didInitRef.current) return;
       const y = event.nativeEvent.contentOffset.y;
       lastOffsetRef.current = y;
       const raw = computeRaw(y);
@@ -109,6 +110,7 @@ export function WheelPicker({
 
   const settle = useCallback(
     (y: number) => {
+      if (!didInitRef.current) return;
       const raw = computeRaw(y);
       const snappedOffset = Math.max(0, Math.min(maxOffset, (raw - halfSlots) * itemHeight));
 

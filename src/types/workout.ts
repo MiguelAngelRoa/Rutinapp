@@ -11,6 +11,58 @@ export type Routine = {
   exercises: Exercise[];
 };
 
+export type SavedRoutine = {
+  id: string;
+  name: string;
+  exercises: Exercise[];
+  updatedAt: number;
+};
+
+export type TimeOfDay = {
+  hour: number;
+  minute: number;
+};
+
+export type DayPlan = {
+  routineId: string | null;
+  /** Custom activity label that doesn't reference a saved routine, e.g. "Jiu Jitsu". */
+  activity: string;
+  startTime: TimeOfDay | null;
+  isRest: boolean;
+  notes: string;
+};
+
+export type WeekSchedule = DayPlan[];
+
+export const WEEKDAY_NAMES = [
+  'Lunes',
+  'Martes',
+  'Miércoles',
+  'Jueves',
+  'Viernes',
+  'Sábado',
+  'Domingo',
+] as const;
+
+export function createEmptyDayPlan(): DayPlan {
+  return {
+    routineId: null,
+    activity: '',
+    startTime: null,
+    isRest: false,
+    notes: '',
+  };
+}
+
+export function createEmptyWeek(): WeekSchedule {
+  return Array.from({ length: 7 }, () => createEmptyDayPlan());
+}
+
+/** JavaScript getDay() (0 = Sunday) mapped to a Monday-first index (0 = Lunes). */
+export function mondayFirstIndex(jsDay: number): number {
+  return (jsDay + 6) % 7;
+}
+
 export function createExercise(partial: Partial<Exercise> = {}): Exercise {
   return {
     id: partial.id ?? createId(),
@@ -18,6 +70,15 @@ export function createExercise(partial: Partial<Exercise> = {}): Exercise {
     sets: partial.sets ?? 3,
     reps: partial.reps ?? 10,
     restSeconds: partial.restSeconds ?? 60,
+  };
+}
+
+export function createRoutine(name: string, exercises: Exercise[]): SavedRoutine {
+  return {
+    id: createId(),
+    name,
+    exercises: exercises.map((exercise) => ({ ...exercise })),
+    updatedAt: Date.now(),
   };
 }
 

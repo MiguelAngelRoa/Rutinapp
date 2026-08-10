@@ -18,3 +18,27 @@ export function formatRest(seconds: number): string {
   }
   return `${seconds} s`;
 }
+
+export type Time12 = {
+  hour12: number;
+  minute: number;
+  period: 'AM' | 'PM';
+};
+
+export function formatTime12(hour: number, minute: number): string {
+  const period = hour < 12 ? 'AM' : 'PM';
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+  return `${String(hour12).padStart(2, '0')}:${String(minute).padStart(2, '0')} ${period}`;
+}
+
+export function from24Hour(hour: number, minute: number): Time12 {
+  const period = hour < 12 ? 'AM' : 'PM';
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+  return { hour12, minute, period };
+}
+
+export function to24Hour(time: Time12): { hour: number; minute: number } {
+  let hour = time.hour12 % 12;
+  if (time.period === 'PM') hour += 12;
+  return { hour, minute: time.minute };
+}
