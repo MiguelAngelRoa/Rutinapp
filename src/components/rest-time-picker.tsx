@@ -9,7 +9,7 @@ import { MaxContentWidth, Fonts, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { formatTime } from '@/utils/format';
 
-const MINUTE_ITEMS = Array.from({ length: 11 }, (_, i) => String(i));
+const MINUTE_ITEMS = Array.from({ length: 61 }, (_, i) => String(i).padStart(2, '0'));
 const SECOND_ITEMS = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
 
 type RestTimePickerProps = {

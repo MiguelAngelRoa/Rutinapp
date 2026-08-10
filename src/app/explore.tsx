@@ -9,7 +9,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ExerciseRow } from "@/components/exercise-row";
 import { ThemedText } from "@/components/themed-text";
-import { Button } from "@/components/ui/button";
 import {
   BottomTabInset,
   MaxContentWidth,
@@ -27,7 +26,6 @@ export default function RoutineScreen() {
     addExercise,
     removeExercise,
     updateExercise,
-    restoreRoutine,
   } = useWorkout();
   const theme = useTheme();
   const safeAreaInsets = useSafeAreaInsets();
@@ -111,13 +109,6 @@ export default function RoutineScreen() {
             </ThemedText>
           </Pressable>
         </View>
-
-        <Button
-          label="Restaurar rutina de ejemplo"
-          variant="ghost"
-          size="md"
-          onPress={restoreRoutine}
-        />
       </View>
     </ScrollView>
   );

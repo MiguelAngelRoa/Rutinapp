@@ -1,4 +1,5 @@
-import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { Icon, Label, NativeTabs, VectorIcon } from "expo-router/unstable-native-tabs";
 import { useColorScheme } from "react-native";
 
 import { Colors } from "@/constants/theme";
@@ -15,12 +16,12 @@ export default function AppTabs() {
     >
       <NativeTabs.Trigger name="index">
         <Label>Entrenar</Label>
-        <Icon src={require("@/assets/images/tabIcons/home.png")} />
+        <Icon src={<VectorIcon family={MaterialCommunityIcons} name="dumbbell" />} />
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="explore">
         <Label>Rutina</Label>
-        <Icon src={require("@/assets/images/tabIcons/explore.png")} />
+        <Icon src={<VectorIcon family={MaterialCommunityIcons} name="clipboard-list-outline" />} />
       </NativeTabs.Trigger>
     </NativeTabs>
   );

@@ -5,7 +5,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 
 import { DEFAULT_ROUTINE, createExercise, type Exercise, type Routine } from '@/types/workout';
 
-const STORAGE_KEY = 'rutinapp:routine';
+const STORAGE_KEY = 'rutinapp:routine:v2';
 
 type WorkoutContextValue = {
   routine: Routine;
@@ -13,7 +13,6 @@ type WorkoutContextValue = {
   addExercise: () => void;
   removeExercise: (id: string) => void;
   updateExercise: (id: string, patch: Partial<Exercise>) => void;
-  restoreRoutine: () => void;
 };
 
 const WorkoutContext = createContext<WorkoutContextValue | null>(null);
@@ -88,7 +87,6 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
             exercise.id === id ? { ...exercise, ...patch } : exercise,
           ),
         })),
-      restoreRoutine: () => setRoutine(DEFAULT_ROUTINE),
     }),
     [routine],
   );

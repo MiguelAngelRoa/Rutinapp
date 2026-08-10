@@ -30,9 +30,5 @@ function createId(): string {
 
 export const DEFAULT_ROUTINE: Routine = {
   name: 'Mi rutina',
-  exercises: [
-    createExercise({ name: 'Dominadas pronas', sets: 4, reps: 8, restSeconds: 90 }),
-    createExercise({ name: 'Flexiones', sets: 3, reps: 12, restSeconds: 60 }),
-    createExercise({ name: 'Sentadillas', sets: 4, reps: 15, restSeconds: 60 }),
-  ],
+  exercises: [],
 };
