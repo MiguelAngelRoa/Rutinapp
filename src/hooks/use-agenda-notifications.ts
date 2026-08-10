@@ -34,7 +34,7 @@ export function useAgendaNotifications() {
     if (Platform.OS === 'web') return;
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
-        shouldShowBanner: true,
+        shouldShowBanner: false,
         shouldShowList: true,
         shouldPlaySound: true,
         shouldSetBadge: false,

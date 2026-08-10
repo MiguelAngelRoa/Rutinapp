@@ -1,3 +1,5 @@
+import "@/notifications/quiet-expo-go";
+
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
 import * as SplashScreen from "expo-splash-screen";
 

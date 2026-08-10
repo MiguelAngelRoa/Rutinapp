@@ -245,6 +245,10 @@ export default function TrainScreen() {
   const showControls =
     !done && sessionRoutine.exercises.length > 0 && exercise != null;
 
+  const todayPlanCard = (
+    <TodayPlanCard isLoaded={todayRoutineLoaded} onLoadRoutine={loadTodayRoutine} />
+  );
+
   return (
     <View style={styles.screen}>
       <ScrollView
@@ -258,14 +262,16 @@ export default function TrainScreen() {
         ]}
       >
         <View style={styles.container}>
-          <TodayPlanCard
-            isLoaded={todayRoutineLoaded}
-            onLoadRoutine={loadTodayRoutine}
-          />
           {done ? (
-            <CompletionView totalSets={totalSets} onRestart={resetSession} />
+            <>
+              {todayPlanCard}
+              <CompletionView totalSets={totalSets} onRestart={resetSession} />
+            </>
           ) : sessionRoutine.exercises.length === 0 ? (
-            <EmptyView />
+            <>
+              {todayPlanCard}
+              <EmptyView />
+            </>
           ) : (
             exercise != null && (
               <View style={styles.stack}>
@@ -318,6 +324,8 @@ export default function TrainScreen() {
                     </ThemedText>
                   </View>
                 </View>
+
+                {todayPlanCard}
 
                 <Animated.View style={[styles.hero, heroAnimatedStyle]}>
                   <Animated.View style={[styles.heroInfo, heroInfoOpacity]}>
