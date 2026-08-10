@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Modal,
   Platform,
@@ -18,10 +18,12 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAudioPlayer, type AudioPlayer } from "expo-audio";
+import * as Notifications from "expo-notifications";
 
 import { RestTimer } from "@/components/rest-timer";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
+import { TodayPlanCard } from "@/components/today-plan-card";
 import { Button } from "@/components/ui/button";
 import {
   BottomTabInset,
@@ -42,6 +44,7 @@ export default function TrainScreen() {
   const [completedSets, setCompletedSets] = useState(0);
   const [done, setDone] = useState(false);
   const [restartModalVisible, setRestartModalVisible] = useState(false);
+  const [loadedRoutineId, setLoadedRoutineId] = useState<string | null>(null);
   const restTimer = useRestTimer();
   const theme = useTheme();
   const safeAreaInsets = useSafeAreaInsets();
@@ -99,6 +102,11 @@ export default function TrainScreen() {
   const completedSetsTotal = completedSetsBefore + completedSets;
   const sessionProgress = totalSets > 0 ? completedSetsTotal / totalSets : 0;
 
+  const todayIndex = mondayFirstIndex(new Date().getDay());
+  const todayPlan = schedule[todayIndex];
+  const todayRoutineLoaded =
+    todayPlan?.routineId != null && loadedRoutineId === todayPlan.routineId;
+
   useEffect(() => {
     if (restTimer.phase === "finished") {
       if (Platform.OS !== "web") {
@@ -115,26 +123,57 @@ export default function TrainScreen() {
     setExerciseIndex(0);
     setCompletedSets(0);
     setDone(false);
+    setLoadedRoutineId(null);
     stopRestTimer();
   }, [routine, stopRestTimer]);
+
+  const loadTodayRoutine = useCallback(() => {
+    const todayIndex = mondayFirstIndex(new Date().getDay());
+    const todayPlan = schedule[todayIndex];
+    if (!todayPlan || todayPlan.isRest || !todayPlan.routineId) return;
+    const saved = routines.find((item) => item.id === todayPlan.routineId);
+    if (!saved) return;
+    setSessionRoutine({
+      name: saved.name,
+      exercises: saved.exercises.map((exercise) => ({ ...exercise })),
+    });
+    setExerciseIndex(0);
+    setCompletedSets(0);
+    setDone(false);
+    setLoadedRoutineId(saved.id);
+    stopRestTimer();
+  }, [routines, schedule, stopRestTimer]);
 
   const didAutoLoadRef = useRef(false);
   useEffect(() => {
     if (didAutoLoadRef.current) return;
     didAutoLoadRef.current = true;
+    loadTodayRoutine();
+  }, [loadTodayRoutine]);
 
-    const todayIndex = mondayFirstIndex(new Date().getDay());
-    const todayPlan = schedule[todayIndex];
-    if (todayPlan && !todayPlan.isRest && todayPlan.routineId) {
-      const saved = routines.find((item) => item.id === todayPlan.routineId);
-      if (saved) {
-        setSessionRoutine({
-          name: saved.name,
-          exercises: saved.exercises.map((exercise) => ({ ...exercise })),
-        });
-      }
-    }
-  }, [routines, schedule]);
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    let active = true;
+    const onNotificationResponse = (response: Notifications.NotificationResponse) => {
+      if (response.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) return;
+      if (response.notification.request.content.data?.kind !== "agenda") return;
+      loadTodayRoutine();
+    };
+    Notifications.getLastNotificationResponseAsync()
+      .then((response) => {
+        if (active && response) onNotificationResponse(response);
+      })
+      .catch(() => {
+        // Ignore: no initial notification response available.
+      });
+    const subscription = Notifications.addNotificationResponseReceivedListener(
+      onNotificationResponse,
+    );
+    return () => {
+      active = false;
+      subscription.remove();
+    };
+  }, [loadTodayRoutine]);
 
   const completeSet = () => {
     if (exercise == null) return;
@@ -158,6 +197,7 @@ export default function TrainScreen() {
     setExerciseIndex(0);
     setCompletedSets(0);
     setDone(false);
+    setLoadedRoutineId(null);
     restTimer.stop();
   };
 
@@ -218,6 +258,10 @@ export default function TrainScreen() {
         ]}
       >
         <View style={styles.container}>
+          <TodayPlanCard
+            isLoaded={todayRoutineLoaded}
+            onLoadRoutine={loadTodayRoutine}
+          />
           {done ? (
             <CompletionView totalSets={totalSets} onRestart={resetSession} />
           ) : sessionRoutine.exercises.length === 0 ? (

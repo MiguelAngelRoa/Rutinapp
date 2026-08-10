@@ -1,6 +1,7 @@
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
 import * as SplashScreen from "expo-splash-screen";
 
+import { AgendaNotifications } from "@/components/agenda-notifications";
 import { AnimatedSplashOverlay } from "@/components/animated-icon";
 import AppTabs from "@/components/app-tabs";
 import { WorkoutProvider } from "@/context/workout-context";
@@ -24,6 +25,7 @@ export default function TabLayout() {
   return (
     <ThemeProvider value={AppTheme}>
       <WorkoutProvider>
+        <AgendaNotifications />
         <AnimatedSplashOverlay />
         <AppTabs />
       </WorkoutProvider>
