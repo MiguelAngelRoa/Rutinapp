@@ -92,6 +92,25 @@ export function useRestTimer() {
     [],
   );
 
+  const triggerRestFinishedNotification = useCallback(async () => {
+    if (Platform.OS === 'web') return;
+    try {
+      if (!(await ensurePermission())) return;
+      await ensureRestChannel();
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '¡Descanso terminado!',
+          body: 'Es hora de la siguiente serie.',
+          data: { kind: 'rest' },
+          sound: 'default',
+        },
+        trigger: null, // Trigger immediately
+      });
+    } catch {
+      // Best-effort
+    }
+  }, []);
+
   const start = useCallback(
     (durationSeconds: number) => {
       if (intervalRef.current) {
@@ -133,8 +152,13 @@ export function useRestTimer() {
     }
   }, []);
 
+  const finish = useCallback(() => {
+    stop();
+    triggerRestFinishedNotification();
+  }, [stop, triggerRestFinishedNotification]);
+
   const phase: RestPhase = endTime == null ? 'idle' : now >= endTime ? 'finished' : 'resting';
   const remainingSeconds = endTime == null ? 0 : Math.max(0, Math.ceil((endTime - now) / 1000));
 
-  return { phase, remainingSeconds, start, stop };
+  return { phase, remainingSeconds, start, stop, finish };
 }
