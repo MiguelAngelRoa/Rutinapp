@@ -15,11 +15,13 @@ import {
   type TimeOfDay,
   type WeekSchedule,
 } from '@/types/workout';
+import { localDateKey } from '@/utils/format';
 
 const STORAGE_KEY = 'rutinapp:routines:v1';
 const LEGACY_KEY = 'rutinapp:routine:v2';
 const SCHEDULE_KEY = 'rutinapp:schedule:v1';
 const ACTIVITIES_KEY = 'rutinapp:activities:v1';
+const PLAN_DISMISSAL_KEY = 'rutinapp:dismissed-plan-date:v1';
 
 type WorkoutContextValue = {
   routine: Routine;
@@ -27,6 +29,8 @@ type WorkoutContextValue = {
   activeRoutineId: string | null;
   schedule: WeekSchedule;
   activities: string[];
+  /** Local date (YYYY-MM-DD) for which the "Hoy toca" card was dismissed. */
+  dismissedPlanDate: string | null;
   updateRoutineName: (name: string) => void;
   addExercise: () => void;
   removeExercise: (id: string) => void;
@@ -37,6 +41,7 @@ type WorkoutContextValue = {
   saveRoutine: (name: string) => { id: string; overwrote: boolean };
   loadRoutine: (id: string) => void;
   deleteRoutine: (id: string) => void;
+  dismissTodayPlan: () => void;
 };
 
 const WorkoutContext = createContext<WorkoutContextValue | null>(null);
@@ -159,6 +164,7 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
   const [activeRoutineId, setActiveRoutineId] = useState<string | null>(null);
   const [schedule, setSchedule] = useState<WeekSchedule>(() => createEmptyWeek());
   const [activities, setActivities] = useState<string[]>([]);
+  const [dismissedPlanDate, setDismissedPlanDate] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
@@ -170,6 +176,7 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
       let nextRoutine: Routine = { ...DEFAULT_ROUTINE };
       let nextSchedule: WeekSchedule = createEmptyWeek();
       let nextActivities: string[] = [];
+      let nextDismissedPlanDate: string | null = null;
 
       try {
         const stored = await AsyncStorage.getItem(STORAGE_KEY);
@@ -198,6 +205,11 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
         if (activitiesStored != null) {
           nextActivities = parseActivities(JSON.parse(activitiesStored));
         }
+
+        const dismissalStored = await AsyncStorage.getItem(PLAN_DISMISSAL_KEY);
+        if (dismissalStored != null && dismissalStored.length > 0) {
+          nextDismissedPlanDate = dismissalStored;
+        }
       } catch {
         // Corrupt or unreadable data: fall back to defaults.
       }
@@ -208,6 +220,7 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
         setRoutine(nextRoutine);
         setSchedule(nextSchedule);
         setActivities(nextActivities);
+        setDismissedPlanDate(nextDismissedPlanDate);
         setIsHydrated(true);
       }
     };
@@ -230,7 +243,10 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
     AsyncStorage.setItem(ACTIVITIES_KEY, JSON.stringify(activities)).catch(() => {
       // Ignore write failures: state stays in memory for this session.
     });
-  }, [routine, routines, activeRoutineId, schedule, activities, isHydrated]);
+    AsyncStorage.setItem(PLAN_DISMISSAL_KEY, dismissedPlanDate ?? '').catch(() => {
+      // Ignore write failures: state stays in memory for this session.
+    });
+  }, [routine, routines, activeRoutineId, schedule, activities, dismissedPlanDate, isHydrated]);
 
   const value = useMemo<WorkoutContextValue>(
     () => ({
