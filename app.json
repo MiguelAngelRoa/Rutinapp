@@ -45,6 +45,9 @@
       "eas": {
         "projectId": "42c97056-1f60-474f-9664-fa9d14bcc115"
       }
+    },
+    "devClient": {
+      "development": true
     }
   }
 }
