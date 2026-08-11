@@ -36,9 +36,10 @@ import { useWorkout } from "@/context/workout-context";
 import { useRestTimer } from "@/hooks/use-rest-timer";
 import { useTheme } from "@/hooks/use-theme";
 import { mondayFirstIndex, type Routine } from "@/types/workout";
+import { localDateKey } from "@/utils/format";
 
 export default function TrainScreen() {
-  const { routine, routines, schedule } = useWorkout();
+  const { routine, routines, schedule, dismissedPlanDate, dismissTodayPlan } = useWorkout();
   const [sessionRoutine, setSessionRoutine] = useState<Routine>(routine);
   const [exerciseIndex, setExerciseIndex] = useState(0);
   const [completedSets, setCompletedSets] = useState(0);
@@ -245,8 +246,14 @@ export default function TrainScreen() {
   const showControls =
     !done && sessionRoutine.exercises.length > 0 && exercise != null;
 
-  const todayPlanCard = (
-    <TodayPlanCard isLoaded={todayRoutineLoaded} onLoadRoutine={loadTodayRoutine} />
+  const todayPlanDismissed = dismissedPlanDate === localDateKey(new Date());
+
+  const todayPlanCard = todayPlanDismissed ? null : (
+    <TodayPlanCard
+      isLoaded={todayRoutineLoaded}
+      onLoadRoutine={loadTodayRoutine}
+      onDismiss={dismissTodayPlan}
+    />
   );
 
   return (
@@ -450,8 +457,20 @@ type SetDotsProps = {
 
 function SetDots({ total, completed }: SetDotsProps) {
   const theme = useTheme();
+  const [contentWidth, setContentWidth] = useState(0);
+  const [viewportWidth, setViewportWidth] = useState(0);
+  const canCenter =
+    contentWidth > 0 && viewportWidth > 0 && contentWidth <= viewportWidth;
+
   return (
-    <View style={styles.dots}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.dotsScroll}
+      onLayout={(event) => setViewportWidth(event.nativeEvent.layout.width)}
+      onContentSizeChange={(width) => setContentWidth(width)}
+      contentContainerStyle={[styles.dots, canCenter && styles.dotsCenter]}
+    >
       {Array.from({ length: total }, (_, index) => {
         const isDone = index < completed;
         const isCurrent = index === completed;
@@ -473,7 +492,7 @@ function SetDots({ total, completed }: SetDotsProps) {
           />
         );
       })}
-    </View>
+    </ScrollView>
   );
 }
 
@@ -636,10 +655,17 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     textAlign: "center",
   },
+  dotsScroll: {
+    alignSelf: "stretch",
+    marginTop: Spacing.one,
+  },
   dots: {
     flexDirection: "row",
     gap: Spacing.two,
-    marginTop: Spacing.one,
+  },
+  dotsCenter: {
+    flexGrow: 1,
+    justifyContent: "center",
   },
   dot: {
     width: 16,

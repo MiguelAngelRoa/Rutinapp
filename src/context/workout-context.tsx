@@ -255,6 +255,7 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
       activeRoutineId,
       schedule,
       activities,
+      dismissedPlanDate,
       updateRoutineName: (name) => setRoutine((current) => ({ ...current, name })),
       addExercise: () =>
         setRoutine((current) => ({
@@ -320,8 +321,9 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
           current.map((day) => (day.routineId === id ? { ...day, routineId: null } : day)),
         );
       },
+      dismissTodayPlan: () => setDismissedPlanDate(localDateKey(new Date())),
     }),
-    [routine, routines, activeRoutineId, schedule, activities],
+    [routine, routines, activeRoutineId, schedule, activities, dismissedPlanDate],
   );
 
   if (!isHydrated) return null;

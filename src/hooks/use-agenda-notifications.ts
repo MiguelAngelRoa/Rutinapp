@@ -32,13 +32,39 @@ export function useAgendaNotifications() {
 
   useEffect(() => {
     if (Platform.OS === 'web') return;
+
+    // Ask for notification permission once on startup (local notifications
+    // power both the agenda reminders and the rest-finished alert).
+    const request = async () => {
+      try {
+        const permission = await Notifications.getPermissionsAsync();
+        if (permission.status === 'undetermined') {
+          await Notifications.requestPermissionsAsync({
+            ios: { allowAlert: true, allowBadge: true, allowSound: true },
+          });
+        }
+      } catch {
+        // Best-effort: permission can also be granted later.
+      }
+    };
+    request();
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
     Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowBanner: false,
-        shouldShowList: true,
-        shouldPlaySound: true,
-        shouldSetBadge: false,
-      }),
+      handleNotification: async (notification) => {
+        // Rest-finish notifications are shown as native notifications even in
+        // the foreground. Their sound is left to the in-app beep to avoid a
+        // double alert; agenda notifications stay list-only as before.
+        const isRest = notification.request.content.data?.kind === 'rest';
+        return {
+          shouldShowBanner: isRest,
+          shouldShowList: true,
+          shouldPlaySound: isRest ? false : true,
+          shouldSetBadge: false,
+        };
+      },
     });
     return () => {
       Notifications.setNotificationHandler(null);
