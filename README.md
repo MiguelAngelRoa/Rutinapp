@@ -1,60 +1,108 @@
-# Rutinapp
+# Rutinapp 💪
 
-Aplicación de ayuda para hacer ejercicios con compatibilidad para teléfonos móviles.
+Aplicación móvil para gestionar tus rutinas de ejercicio y seguirlas en el gimnasio. Crea rutinas con series, repeticiones y descansos, organízalas en una agenda semanal y entrena con un temporizador de descanso integrado.
 
-## Welcome to your Expo app 👋
+Desarrollada con [Expo](https://expo.dev) (React Native) y TypeScript.
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+## ✨ Características
 
-## Get started
+- **Entrenador de sesiones** — Sigue tu rutina ejercicio a ejercicio con control de progreso por series, repeticiones y barra de avance de la sesión.
+- **Temporizador de descanso** — Cuenta regresiva entre series con sonido, vibración y opción de saltar el descanso.
+- **Editor de rutinas** — Crea, guarda, carga y elimina múltiples rutinas. Cada ejercicio configura nombre, series, repeticiones y descanso.
+- **Agenda semanal** — Asigna una rutina o actividad (p. ej. "Jiu Jitsu") a cada día de la semana, marca días de descanso, define hora de inicio y añade notas.
+- **Recordatorios** — Notificaciones semanales programadas según tu agenda para avisarte de tus entrenamientos. Al tocar un recordatorio se carga la rutina del día automáticamente.
+- **Carga automática** — Al abrir la app se detecta el plan del día y se ofrece cargar la rutina correspondiente.
+- **Persistencia local** — Todos los datos se guardan en el dispositivo con AsyncStorage (sin cuenta ni servidor).
+- **Tema oscuro** — Interfaz oscura con animaciones fluidas (React Native Reanimated).
 
-1. Install dependencies
+## 🚀 Puesta en marcha
 
-   ```bash
-   npm install
-   ```
+### Requisitos
 
-2. Start the app
+- [Node.js](https://nodejs.org/) (LTS)
+- [Expo Go](https://expo.dev/go) en tu teléfono, o un emulador de Android/iOS
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+### Instalación
 
 ```bash
-npm run reset-project
+# Instala las dependencias
+npm install
+
+# Inicia el servidor de desarrollo con túnel
+npm start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Escanea el código QR con Expo Go o usa las opciones del terminal para abrir la app en Android, iOS o web.
 
-### Other setup steps
+### Scripts disponibles
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+| Script              | Descripción                                        |
+| ------------------- | -------------------------------------------------- |
+| `npm start`         | Inicia Expo con túnel                              |
+| `npm run android`   | Inicia en un emulador/ dispositivo Android         |
+| `npm run ios`       | Inicia en el simulador de iOS                      |
+| `npm run web`       | Inicia en el navegador                             |
+| `npm run dev`       | Inicia con el *development client*                 |
+| `npm run dev:android` | Inicia con el *development client* en Android    |
+| `npm run dev:ios`   | Inicia con el *development client* en iOS          |
+| `npm run lint`      | Ejecuta ESLint                                     |
 
-## Learn more
+> ⚠️ Las notificaciones y el sonido del temporizador funcionan en dispositivos físicos. En la web no se programan recordatorios.
 
-To learn more about developing your project with Expo, look at the following resources:
+## 📱 Cómo usarla
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+1. **Rutina** — Añade ejercicios, configura series/repeticiones/descanso y guárdala con un nombre.
+2. **Agenda** — Toca un día de la semana para asignarle una rutina guardada o una actividad libre, o márcalo como descanso.
+3. **Entrenar** — Abre la pestaña de entrenamiento: la app sugiere la rutina del día. Completa cada serie y el temporizador de descanso arranca automáticamente.
 
-## Join the community
+## 🧱 Estructura del proyecto
 
-Join our community of developers creating universal apps.
+```
+rutinapp/
+├── src/
+│   ├── app/               # Rutas (expo-router)
+│   │   ├── index.tsx      # Pestaña Entrenar
+│   │   ├── explore.tsx    # Pestaña Rutina
+│   │   ├── schedule.tsx   # Pestaña Agenda
+│   │   └── _layout.tsx    # Layout raíz (provider + tabs)
+│   ├── components/        # Componentes de UI reutilizables
+│   ├── constants/         # Tema, colores y espaciados
+│   ├── context/           # Estado global y persistencia (AsyncStorage)
+│   ├── hooks/             # Hooks personalizados (temporizador, notificaciones, tema)
+│   ├── notifications/     # Lógica de recordatorios de agenda
+│   ├── services/          # Servicio de notificaciones
+│   ├── types/             # Tipos de dominio (ejercicios, rutinas, agenda)
+│   └── utils/             # Utilidades de formato de fecha/hora
+├── android/               # Proyecto nativo de Android (dev client)
+├── app.json               # Configuración de Expo
+├── eas.json               # Configuración de builds EAS
+└── package.json
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## 🛠️ Stack tecnológico
+
+- [Expo SDK 54](https://expo.dev) + [React Native 0.81](https://reactnative.dev/)
+- [expo-router](https://docs.expo.dev/router/introduction) con *native tabs* y rutas tipadas
+- [TypeScript](https://www.typescriptlang.org/)
+- [React 19](https://react.dev/) con React Compiler
+- [react-native-reanimated](https://docs.swmansion.com/react-native-reanimated/) para animaciones
+- [expo-notifications](https://docs.expo.dev/versions/latest/sdk/notifications) para recordatorios
+- [expo-audio](https://docs.expo.dev/versions/latest/sdk/audio) para efectos de sonido
+- [AsyncStorage](https://react-native-async-storage.github.io/async-storage/) para persistencia local
+- [EAS Build](https://docs.expo.dev/build/introduction) para generar los binarios
+
+## 📦 Builds
+
+La configuración de [EAS Build](https://docs.expo.dev/build/introduction) (`eas.json`) incluye tres perfiles:
+
+- `development` — *development client* (APK)
+- `preview` — APK de distribución interna
+- `production` — App bundle para publicar
+
+```bash
+eas build --profile preview --platform android
+```
+
+## 📄 Licencia
+
+Este proyecto se distribuye bajo la [licencia MIT](LICENSE).
