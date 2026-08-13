@@ -62,7 +62,12 @@ export function useRestTimer() {
     async (target: Date, token: number) => {
       if (Platform.OS === 'web') return;
       try {
-        if (!(await ensurePermission())) return;
+        if (!(await ensurePermission())) {
+          if (__DEV__) {
+            console.warn('[notifications] rest: no permission');
+          }
+          return;
+        }
         await ensureRestChannel();
         const id = await Notifications.scheduleNotificationAsync({
           content: {
@@ -85,8 +90,14 @@ export function useRestTimer() {
           return;
         }
         scheduledNotificationRef.current = id;
-      } catch {
+        if (__DEV__) {
+          console.log('[notifications] rest scheduled for', target.toLocaleTimeString());
+        }
+      } catch (error) {
         // Best-effort: the rest timer works even without notifications.
+        if (__DEV__) {
+          console.warn('[notifications] rest scheduling failed:', error);
+        }
       }
     },
     [],
@@ -95,7 +106,12 @@ export function useRestTimer() {
   const triggerRestFinishedNotification = useCallback(async () => {
     if (Platform.OS === 'web') return;
     try {
-      if (!(await ensurePermission())) return;
+      if (!(await ensurePermission())) {
+        if (__DEV__) {
+          console.warn('[notifications] rest finish: no permission');
+        }
+        return;
+      }
       await ensureRestChannel();
       await Notifications.scheduleNotificationAsync({
         content: {
@@ -106,8 +122,14 @@ export function useRestTimer() {
         },
         trigger: null, // Trigger immediately
       });
-    } catch {
+      if (__DEV__) {
+        console.log('[notifications] rest finish notification triggered');
+      }
+    } catch (error) {
       // Best-effort
+      if (__DEV__) {
+        console.warn('[notifications] rest finish failed:', error);
+      }
     }
   }, []);
 

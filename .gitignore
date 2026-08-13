@@ -61,3 +61,5 @@ yarn-error.log*
 !.env.example
 .aider*
 expo
+CONVENTIONS.md
+GEMINI.md

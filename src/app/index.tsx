@@ -52,7 +52,7 @@ export default function TrainScreen() {
 
   const setDoneSound = useAudioPlayer(require("@/assets/sounds/set-done.wav"));
   const restFinishSound = useAudioPlayer(
-    require("@/assets/sounds/rest-finish.wav"),
+    require("@/assets/sounds/silbato.mp3"),
   );
 
   const playBeep = (player: AudioPlayer) => {
@@ -224,8 +224,8 @@ export default function TrainScreen() {
 
   const handlePrimary = () => {
     if (restTimer.phase === "resting") {
-      playBeep(restFinishSound);
-      restTimer.stop();
+      playBeep(setDoneSound);
+      restTimer.finish();
       return;
     }
     if (restTimer.phase === "finished") {

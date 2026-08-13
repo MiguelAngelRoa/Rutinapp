@@ -1,3 +1,5 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { usePathname } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { useCallback, useEffect, useState } from 'react';
 import { AppState, Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
@@ -11,17 +13,37 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
-import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Radius, Shadow, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 type PermissionState = 'checking' | 'granted' | 'denied';
 
+const DISMISSAL_KEY = 'rutinapp:notification-banner-dismissed:v1';
+
 export function NotificationPermissionBanner() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const pathname = usePathname();
   const [permission, setPermission] = useState<PermissionState>('checking');
   const [dismissed, setDismissed] = useState(false);
   const progress = useSharedValue(0);
+
+  useEffect(() => {
+    AsyncStorage.getItem(DISMISSAL_KEY)
+      .then((value) => {
+        if (value === '1') setDismissed(true);
+      })
+      .catch(() => {
+        // Best-effort: the banner just shows again on next launch.
+      });
+  }, []);
+
+  const hide = useCallback(() => {
+    setDismissed(true);
+    AsyncStorage.setItem(DISMISSAL_KEY, '1').catch(() => {
+      // Best-effort: nothing else to clean up.
+    });
+  }, []);
 
   const check = useCallback(async () => {
     try {
@@ -51,7 +73,7 @@ export function NotificationPermissionBanner() {
     return () => subscription.remove();
   }, [check]);
 
-  const visible = !dismissed && permission === 'denied';
+  const visible = !dismissed && permission === 'denied' && pathname !== '/explore';
 
   useEffect(() => {
     progress.value = withTiming(visible ? 1 : 0, { duration: 250 });
@@ -68,7 +90,7 @@ export function NotificationPermissionBanner() {
 
   return (
     <Animated.View
-      pointerEvents="box-none"
+      pointerEvents={visible ? 'box-none' : 'none'}
       style={[
         styles.overlay,
         { paddingTop: insets.top + Spacing.two },
@@ -78,7 +100,7 @@ export function NotificationPermissionBanner() {
       <View
         style={[
           styles.card,
-          { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+          { backgroundColor: theme.backgroundElement, borderColor: theme.accent },
         ]}
       >
         <View style={styles.cardHeader}>
@@ -87,7 +109,7 @@ export function NotificationPermissionBanner() {
             accessibilityRole="button"
             accessibilityLabel="Cerrar aviso"
             hitSlop={8}
-            onPress={() => setDismissed(true)}
+            onPress={hide}
             style={({ pressed }) => [styles.close, pressed && styles.pressed]}
           >
             <ThemedText type="smallBold" style={styles.closeText}>
@@ -128,6 +150,7 @@ const styles = StyleSheet.create({
     padding: Spacing.four,
     gap: Spacing.two,
     elevation: 6,
+    ...Shadow,
   },
   cardHeader: {
     flexDirection: 'row',
