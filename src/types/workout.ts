@@ -34,6 +34,38 @@ export type DayPlan = {
 
 export type WeekSchedule = DayPlan[];
 
+/** Format identifier used when routines are shared/imported as files or links. */
+export const ROUTINE_SHARE_FORMAT = 'rutinapp-routine' as const;
+
+/** Versioned payload exchanged when sharing a routine. */
+export type RoutineSharePayload = {
+  format: typeof ROUTINE_SHARE_FORMAT;
+  version: 1;
+  routine: Routine;
+};
+
+export function isExercise(value: unknown): value is Exercise {
+  if (typeof value !== 'object' || value == null) return false;
+  const exercise = value as Partial<Exercise>;
+  return (
+    typeof exercise.id === 'string' &&
+    typeof exercise.name === 'string' &&
+    typeof exercise.sets === 'number' &&
+    typeof exercise.reps === 'number' &&
+    typeof exercise.restSeconds === 'number'
+  );
+}
+
+export function isRoutine(value: unknown): value is Routine {
+  if (typeof value !== 'object' || value == null) return false;
+  const routine = value as Partial<Routine>;
+  return (
+    typeof routine.name === 'string' &&
+    Array.isArray(routine.exercises) &&
+    routine.exercises.every(isExercise)
+  );
+}
+
 export const WEEKDAY_NAMES = [
   'Lunes',
   'Martes',

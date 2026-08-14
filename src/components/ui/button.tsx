@@ -4,7 +4,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-export type ButtonVariant = 'primary' | 'success' | 'ghost' | 'danger';
+export type ButtonVariant = 'primary' | 'success' | 'ghost' | 'danger' | 'outline';
 
 export type ButtonProps = PressableProps & {
   label: string;
@@ -24,9 +24,10 @@ export function Button({
   const theme = useTheme();
 
   const isFilled = variant === 'primary' || variant === 'success';
-  const backgroundColor = variant === 'primary' ? theme.accent : variant === 'success' ? theme.success : 'transparent';
+  const isOutline = variant === 'outline';
+  const backgroundColor = variant === 'primary' ? theme.accent : variant === 'success' ? theme.success : isOutline ? theme.background : 'transparent';
   const color =
-    isFilled ? theme.onAccent : variant === 'danger' ? '#F04438' : theme.textSecondary;
+    isFilled ? theme.onAccent : variant === 'danger' ? '#F04438' : isOutline ? theme.accent : theme.textSecondary;
 
   return (
     <Pressable
@@ -35,8 +36,9 @@ export function Button({
       style={({ pressed }) => [
         styles.base,
         isFilled ? styles.filled : styles.ghost,
+        isOutline && styles.outline,
         size === 'lg' ? styles.lg : styles.md,
-        { backgroundColor },
+        { backgroundColor, borderColor: isOutline ? theme.accent : undefined },
         pressed && styles.pressed,
         disabled && styles.disabled,
         style,
@@ -61,6 +63,10 @@ const styles = StyleSheet.create({
   },
   ghost: {
     borderRadius: Radius.md,
+  },
+  outline: {
+    borderRadius: Radius.md,
+    borderWidth: 1,
   },
   lg: {
     height: 56,

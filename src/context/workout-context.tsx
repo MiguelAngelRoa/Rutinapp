@@ -8,6 +8,8 @@ import {
   DEFAULT_ROUTINE,
   createExercise,
   createEmptyWeek,
+  isExercise,
+  isRoutine,
   type DayPlan,
   type Exercise,
   type Routine,
@@ -31,6 +33,8 @@ type WorkoutContextValue = {
   activities: string[];
   /** Local date (YYYY-MM-DD) for which the "Hoy toca" card was dismissed. */
   dismissedPlanDate: string | null;
+  /** Routine awaiting confirmation before being imported (file or deep link). */
+  pendingImport: Routine | null;
   updateRoutineName: (name: string) => void;
   addExercise: () => void;
   removeExercise: (id: string) => void;
@@ -41,32 +45,12 @@ type WorkoutContextValue = {
   saveRoutine: (name: string) => { id: string; overwrote: boolean };
   loadRoutine: (id: string) => void;
   deleteRoutine: (id: string) => void;
+  importRoutine: (routine: Routine) => { id: string; overwrote: boolean };
+  setPendingImport: (routine: Routine | null) => void;
   dismissTodayPlan: () => void;
 };
 
 const WorkoutContext = createContext<WorkoutContextValue | null>(null);
-
-function isExercise(value: unknown): value is Exercise {
-  if (typeof value !== 'object' || value == null) return false;
-  const exercise = value as Partial<Exercise>;
-  return (
-    typeof exercise.id === 'string' &&
-    typeof exercise.name === 'string' &&
-    typeof exercise.sets === 'number' &&
-    typeof exercise.reps === 'number' &&
-    typeof exercise.restSeconds === 'number'
-  );
-}
-
-function isRoutine(value: unknown): value is Routine {
-  if (typeof value !== 'object' || value == null) return false;
-  const routine = value as Partial<Routine>;
-  return (
-    typeof routine.name === 'string' &&
-    Array.isArray(routine.exercises) &&
-    routine.exercises.every(isExercise)
-  );
-}
 
 function isSavedRoutine(value: unknown): value is SavedRoutine {
   if (typeof value !== 'object' || value == null) return false;
@@ -165,6 +149,7 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
   const [schedule, setSchedule] = useState<WeekSchedule>(() => createEmptyWeek());
   const [activities, setActivities] = useState<string[]>([]);
   const [dismissedPlanDate, setDismissedPlanDate] = useState<string | null>(null);
+  const [pendingImport, setPendingImport] = useState<Routine | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
@@ -256,6 +241,7 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
       schedule,
       activities,
       dismissedPlanDate,
+      pendingImport,
       updateRoutineName: (name) => setRoutine((current) => ({ ...current, name })),
       addExercise: () =>
         setRoutine((current) => ({
@@ -321,9 +307,34 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
           current.map((day) => (day.routineId === id ? { ...day, routineId: null } : day)),
         );
       },
+      importRoutine: (routine) => {
+        const name = routine.name.trim() || DEFAULT_ROUTINE.name;
+        const exercises = routine.exercises.map((exercise) => ({ ...exercise }));
+        const existing = routines.find((item) => item.name === name);
+        if (existing) {
+          const updated: SavedRoutine = {
+            ...existing,
+            name,
+            exercises,
+            updatedAt: Date.now(),
+          };
+          setRoutines((current) =>
+            current.map((item) => (item.id === existing.id ? updated : item)),
+          );
+          setActiveRoutineId(existing.id);
+          setRoutine({ name, exercises });
+          return { id: existing.id, overwrote: true };
+        }
+        const created = createRoutine(name, exercises);
+        setRoutines((current) => [...current, created]);
+        setActiveRoutineId(created.id);
+        setRoutine({ name, exercises });
+        return { id: created.id, overwrote: false };
+      },
+      setPendingImport,
       dismissTodayPlan: () => setDismissedPlanDate(localDateKey(new Date())),
     }),
-    [routine, routines, activeRoutineId, schedule, activities, dismissedPlanDate],
+    [routine, routines, activeRoutineId, schedule, activities, dismissedPlanDate, pendingImport],
   );
 
   if (!isHydrated) return null;

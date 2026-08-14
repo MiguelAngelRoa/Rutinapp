@@ -179,8 +179,30 @@ export function useRestTimer() {
     triggerRestFinishedNotification();
   }, [stop, triggerRestFinishedNotification]);
 
+  const adjust = useCallback(
+    (deltaSeconds: number) => {
+      if (endTimeRef.current == null) return;
+      const newEndTimeMs = endTimeRef.current + deltaSeconds * 1000;
+      endTimeRef.current = newEndTimeMs;
+      setEndTime(newEndTimeMs);
+      setNow(Date.now());
+      if (scheduledNotificationRef.current) {
+        const id = scheduledNotificationRef.current;
+        scheduledNotificationRef.current = null;
+        Notifications.cancelScheduledNotificationAsync(id).catch(() => {
+          // Best-effort: may already have fired.
+        });
+      }
+      scheduleRestFinishedNotification(
+        new Date(newEndTimeMs),
+        ++scheduleTokenRef.current,
+      );
+    },
+    [scheduleRestFinishedNotification],
+  );
+
   const phase: RestPhase = endTime == null ? 'idle' : now >= endTime ? 'finished' : 'resting';
   const remainingSeconds = endTime == null ? 0 : Math.max(0, Math.ceil((endTime - now) / 1000));
 
-  return { phase, remainingSeconds, start, stop, finish };
+  return { phase, remainingSeconds, start, stop, finish, adjust };
 }

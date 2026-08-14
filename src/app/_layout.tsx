@@ -9,6 +9,8 @@ import { AgendaNotifications } from "@/components/agenda-notifications";
 import { AnimatedSplashOverlay } from "@/components/animated-icon";
 import AppTabs from "@/components/app-tabs";
 import { NotificationPermissionBanner } from "@/components/notification-permission-banner";
+import { RoutineImportDialog } from "@/components/routine-import-dialog";
+import { RoutineImportLink } from "@/components/routine-import-link";
 import { WorkoutProvider } from "@/context/workout-context";
 
 SplashScreen.preventAutoHideAsync();
@@ -35,6 +37,8 @@ export default function TabLayout() {
           <AnimatedSplashOverlay />
           <AppTabs />
           <NotificationPermissionBanner />
+          <RoutineImportLink />
+          <RoutineImportDialog />
         </WorkoutProvider>
       </ThemeProvider>
     </GestureHandlerRootView>

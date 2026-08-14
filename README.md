@@ -12,6 +12,7 @@ Desarrollada con [Expo](https://expo.dev) (React Native) y TypeScript.
 - **Agenda semanal** — Asigna una rutina o actividad (p. ej. "Jiu Jitsu") a cada día de la semana, marca días de descanso, define hora de inicio y añade notas.
 - **Recordatorios** — Notificaciones semanales programadas según tu agenda para avisarte de tus entrenamientos. Al tocar un recordatorio se carga la rutina del día automáticamente.
 - **Carga automática** — Al abrir la app se detecta el plan del día y se ofrece cargar la rutina correspondiente.
+- **Compartir rutinas** — Exporta tus rutinas como archivo (WhatsApp, email) o enlace `rutinapp://`, e importa rutinas recibidas con vista previa y confirmación.
 - **Persistencia local** — Todos los datos se guardan en el dispositivo con AsyncStorage (sin cuenta ni servidor).
 - **Tema oscuro** — Interfaz oscura con animaciones fluidas (React Native Reanimated).
 

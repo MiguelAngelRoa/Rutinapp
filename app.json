@@ -28,7 +28,47 @@
         "NOTIFICATIONS"
       ],
       "predictiveBackGestureEnabled": false,
-      "package": "com.miguelangelroa.rutinapp"
+      "package": "com.miguelangelroa.rutinapp",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "category": [
+            "DEFAULT"
+          ],
+          "data": [
+            {
+              "scheme": "content",
+              "mimeType": "application/x-rutinapp"
+            }
+          ]
+        },
+        {
+          "action": "VIEW",
+          "category": [
+            "DEFAULT"
+          ],
+          "data": [
+            {
+              "scheme": "content",
+              "mimeType": "application/octet-stream",
+              "pathPattern": ".*\\.rutinapp"
+            }
+          ]
+        },
+        {
+          "action": "VIEW",
+          "category": [
+            "DEFAULT"
+          ],
+          "data": [
+            {
+              "scheme": "content",
+              "mimeType": "application/json",
+              "pathPattern": ".*\\.rutinapp"
+            }
+          ]
+        }
+      ]
     },
     "web": {
       "output": "static",

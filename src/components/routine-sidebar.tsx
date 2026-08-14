@@ -1,6 +1,7 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   Modal,
   Pressable,
@@ -18,6 +19,8 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useWorkout } from '@/context/workout-context';
 import { useTheme } from '@/hooks/use-theme';
 import type { SavedRoutine } from '@/types/workout';
+import { pickRoutineFromDocumentPicker } from '@/utils/pick-routine-file';
+import { shareRoutineFile } from '@/utils/share-routine';
 
 type RoutineSidebarProps = {
   visible: boolean;
@@ -29,12 +32,15 @@ export function RoutineSidebar({ visible, onClose, onRequestSave }: RoutineSideb
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { routines, activeRoutineId, loadRoutine, deleteRoutine } = useWorkout();
+  const { routines, activeRoutineId, routine, setPendingImport, loadRoutine, deleteRoutine } =
+    useWorkout();
 
   const panelWidth = Math.min(340, Math.round(width * 0.86));
   const translateX = useRef(new Animated.Value(-panelWidth)).current;
 
   const [deleteTarget, setDeleteTarget] = useState<SavedRoutine | null>(null);
+  const [sharing, setSharing] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => {
     if (!visible) {
@@ -54,6 +60,40 @@ export function RoutineSidebar({ visible, onClose, onRequestSave }: RoutineSideb
   const handleLoad = (id: string) => {
     loadRoutine(id);
     onClose();
+  };
+
+  const handleShare = async () => {
+    if (sharing || routine.exercises.length === 0) return;
+    setSharing(true);
+    try {
+      const result = await shareRoutineFile(routine);
+      if (result === 'unavailable') {
+        Alert.alert(
+          'No se pudo compartir',
+          'Compartir no está disponible en este dispositivo. Prueba a importar el archivo desde otra app.',
+        );
+      }
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const handleImport = async () => {
+    if (importing) return;
+    setImporting(true);
+    try {
+      const result = await pickRoutineFromDocumentPicker();
+      if (result.status === 'ok') {
+        setPendingImport(result.routine);
+      } else if (result.status === 'invalid') {
+        Alert.alert(
+          'Archivo no válido',
+          'El archivo seleccionado no contiene una rutina válida de Rutinapp.',
+        );
+      }
+    } finally {
+      setImporting(false);
+    }
   };
 
   return (
@@ -95,6 +135,25 @@ export function RoutineSidebar({ visible, onClose, onRequestSave }: RoutineSideb
           </View>
 
           <Button label="Guardar rutina actual" size="md" onPress={onRequestSave} />
+
+          <View style={styles.transferButtons}>
+            <Button
+              label="Compartir"
+              size="md"
+              variant="outline"
+              disabled={sharing || routine.exercises.length === 0}
+              onPress={handleShare}
+              style={styles.transferButton}
+            />
+            <Button
+              label="Importar"
+              size="md"
+              variant="outline"
+              disabled={importing}
+              onPress={handleImport}
+              style={styles.transferButton}
+            />
+          </View>
 
           <ThemedText type="caps" themeColor="textSecondary" style={styles.listTitle}>
             Guardadas
@@ -216,6 +275,14 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     padding: Spacing.one,
+  },
+  transferButtons: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+    marginTop: Spacing.two,
+  },
+  transferButton: {
+    flex: 1,
   },
   listTitle: {
     marginTop: Spacing.four,

@@ -20,6 +20,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAudioPlayer, type AudioPlayer } from "expo-audio";
 import * as Notifications from "expo-notifications";
 
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+
 import { RestTimer } from "@/components/rest-timer";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
@@ -45,6 +47,8 @@ export default function TrainScreen() {
   const [completedSets, setCompletedSets] = useState(0);
   const [done, setDone] = useState(false);
   const [restartModalVisible, setRestartModalVisible] = useState(false);
+  const [undoModalVisible, setUndoModalVisible] = useState(false);
+  const [forwardModalVisible, setForwardModalVisible] = useState(false);
   const [loadedRoutineId, setLoadedRoutineId] = useState<string | null>(null);
   const restTimer = useRestTimer();
   const theme = useTheme();
@@ -92,6 +96,7 @@ export default function TrainScreen() {
   const exercise = sessionRoutine.exercises[exerciseIndex];
   const isLastExercise = exerciseIndex >= sessionRoutine.exercises.length - 1;
   const allSetsDone = exercise != null && completedSets >= exercise.sets;
+  const canGoBack = completedSets > 0 || exerciseIndex > 0;
 
   const totalSets = sessionRoutine.exercises.reduce(
     (sum, item) => sum + item.sets,
@@ -205,6 +210,34 @@ export default function TrainScreen() {
   const handleConfirmRestart = () => {
     setRestartModalVisible(false);
     resetSession();
+  };
+
+  const handleConfirmUndo = () => {
+    setUndoModalVisible(false);
+    restTimer.stop();
+    if (completedSets > 0) {
+      setCompletedSets((count) => Math.max(0, count - 1));
+      return;
+    }
+    if (exerciseIndex > 0) {
+      const previous = sessionRoutine.exercises[exerciseIndex - 1];
+      setExerciseIndex(exerciseIndex - 1);
+      setCompletedSets(previous?.sets ?? 0);
+    }
+  };
+
+  const handleForward = () => {
+    setForwardModalVisible(true);
+  };
+
+  const handleConfirmForward = () => {
+    setForwardModalVisible(false);
+    if (allSetsDone) {
+      advance();
+      return;
+    }
+    setCompletedSets((count) => count + 1);
+    playBeep(setDoneSound);
   };
 
   const getPrimaryLabel = () => {
@@ -360,11 +393,58 @@ export default function TrainScreen() {
                     >
                       {exercise.reps} reps por serie
                     </ThemedText>
-                    <SetDots total={exercise.sets} completed={completedSets} />
+                    <View style={styles.setRow}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={
+                          completedSets > 0
+                            ? "Volver a la serie anterior"
+                            : "Volver al ejercicio anterior"
+                        }
+                        disabled={!canGoBack}
+                        onPress={() => setUndoModalVisible(true)}
+                        hitSlop={8}
+                        style={({ pressed }) => [
+                          styles.setArrow,
+                          { borderColor: theme.border },
+                          !canGoBack && styles.setArrowDisabled,
+                          pressed && styles.pressed,
+                        ]}
+                      >
+                        <MaterialCommunityIcons
+                          name="chevron-left"
+                          size={24}
+                          color={theme.accent}
+                        />
+                      </Pressable>
+                      <SetDots total={exercise.sets} completed={completedSets} />
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={
+                          allSetsDone
+                            ? "Ir al siguiente ejercicio"
+                            : "Completar siguiente serie"
+                        }
+                        onPress={handleForward}
+                        hitSlop={8}
+                        style={({ pressed }) => [
+                          styles.setArrow,
+                          { borderColor: theme.border },
+                          pressed && styles.pressed,
+                        ]}
+                      >
+                        <MaterialCommunityIcons
+                          name="chevron-right"
+                          size={24}
+                          color={theme.accent}
+                        />
+                      </Pressable>
+                    </View>
                     <RestTimer
                       phase="idle"
                       remainingSeconds={restTimer.remainingSeconds}
                       durationSeconds={exercise.restSeconds}
+                      onAdjustSeconds={restTimer.adjust}
                     />
                   </Animated.View>
 
@@ -376,6 +456,7 @@ export default function TrainScreen() {
                       phase={restTimer.phase}
                       remainingSeconds={restTimer.remainingSeconds}
                       durationSeconds={exercise.restSeconds}
+                      onAdjustSeconds={restTimer.adjust}
                     />
                   </Animated.View>
                 </Animated.View>
@@ -440,6 +521,99 @@ export default function TrainScreen() {
                 variant="danger"
                 size="md"
                 onPress={handleConfirmRestart}
+                style={styles.modalButton}
+              />
+            </View>
+          </ThemedView>
+        </View>
+      </Modal>
+      <Modal
+        visible={undoModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setUndoModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <ThemedView
+            type="backgroundElement"
+            style={[styles.modalCard, { borderColor: theme.border }]}
+          >
+            <ThemedText type="heading" style={styles.modalTitle}>
+              {completedSets > 0
+                ? "¿Volver a la serie anterior?"
+                : "¿Volver al ejercicio anterior?"}
+            </ThemedText>
+            <ThemedText
+              type="small"
+              themeColor="textSecondary"
+              style={styles.modalText}
+            >
+              {completedSets > 0
+                ? `Regresarás a la serie ${completedSets} de ${exercise?.sets ?? 0}.`
+                : `Volverás a "${sessionRoutine.exercises[exerciseIndex - 1]?.name ?? "el ejercicio anterior"}".`}{" "}
+              El descanso actual se detendrá.
+            </ThemedText>
+            <View style={styles.modalActions}>
+              <Button
+                label="Cancelar"
+                variant="ghost"
+                size="md"
+                onPress={() => setUndoModalVisible(false)}
+                style={styles.modalButton}
+              />
+              <Button
+                label="Sí, volver"
+                variant="danger"
+                size="md"
+                onPress={handleConfirmUndo}
+                style={styles.modalButton}
+              />
+            </View>
+          </ThemedView>
+        </View>
+      </Modal>
+      <Modal
+        visible={forwardModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setForwardModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <ThemedView
+            type="backgroundElement"
+            style={[styles.modalCard, { borderColor: theme.border }]}
+          >
+            <ThemedText type="heading" style={styles.modalTitle}>
+              {allSetsDone
+                ? isLastExercise
+                  ? "¿Terminar rutina?"
+                  : "¿Pasar al siguiente ejercicio?"
+                : "¿Completar la serie?"}
+            </ThemedText>
+            <ThemedText
+              type="small"
+              themeColor="textSecondary"
+              style={styles.modalText}
+            >
+              {allSetsDone
+                ? isLastExercise
+                  ? "Marcarás la rutina como terminada."
+                  : `Avanzarás a "${sessionRoutine.exercises[exerciseIndex + 1]?.name ?? "siguiente ejercicio"}" sin iniciar descanso.`
+                : `Marcarás la serie ${completedSets + 1} de ${exercise?.sets ?? 0} como completada sin iniciar descanso.`}
+            </ThemedText>
+            <View style={styles.modalActions}>
+              <Button
+                label="Cancelar"
+                variant="ghost"
+                size="md"
+                onPress={() => setForwardModalVisible(false)}
+                style={styles.modalButton}
+              />
+              <Button
+                label="Sí, avanzar"
+                variant="primary"
+                size="md"
+                onPress={handleConfirmForward}
                 style={styles.modalButton}
               />
             </View>
@@ -659,8 +833,26 @@ const styles = StyleSheet.create({
     alignSelf: "stretch",
     marginTop: Spacing.one,
   },
+  setRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.three,
+    alignSelf: "stretch",
+  },
+  setArrow: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  setArrowDisabled: {
+    opacity: 0.35,
+  },
   dots: {
     flexDirection: "row",
+    alignItems: "center",
     gap: Spacing.two,
   },
   dotsCenter: {
