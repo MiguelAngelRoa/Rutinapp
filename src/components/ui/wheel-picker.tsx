@@ -1,5 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   StyleSheet,
@@ -67,6 +67,7 @@ export function WheelPicker({
   const didInitRef = useRef(false);
   const lastRawRef = useRef(0);
   const lastOffsetRef = useRef(0);
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(initialIndex);
 
   const cycle = items.length;
@@ -126,23 +127,40 @@ export function WheelPicker({
     [computeRaw, halfSlots, itemHeight, maxOffset, pad, onChange],
   );
 
+  const clearSettleTimer = useCallback(() => {
+    if (settleTimerRef.current != null) {
+      clearTimeout(settleTimerRef.current);
+      settleTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => clearSettleTimer, [clearSettleTimer]);
+
   const handleMomentumEnd = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      handleScroll(event);
-      settle(event.nativeEvent.contentOffset.y);
+      clearSettleTimer();
+      const y = lastOffsetRef.current ?? event.nativeEvent.contentOffset.y;
+      settle(y);
     },
-    [handleScroll, settle],
+    [clearSettleTimer, settle],
   );
 
   const handleScrollEndDrag = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const velocity = event.nativeEvent.velocity?.y ?? 0;
       if (Math.abs(velocity) < 0.25) {
-        handleScroll(event);
+        clearSettleTimer();
         settle(event.nativeEvent.contentOffset.y);
+        return;
       }
+      lastOffsetRef.current = event.nativeEvent.contentOffset.y;
+      clearSettleTimer();
+      settleTimerRef.current = setTimeout(() => {
+        settleTimerRef.current = null;
+        settle(lastOffsetRef.current);
+      }, 180);
     },
-    [handleScroll, settle],
+    [clearSettleTimer, settle],
   );
 
   const handleContentSizeChange = useCallback(() => {
