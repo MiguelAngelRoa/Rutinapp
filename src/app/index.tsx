@@ -110,8 +110,8 @@ export default function TrainScreen() {
 
   const todayIndex = mondayFirstIndex(new Date().getDay());
   const todayPlan = schedule[todayIndex];
-  const todayRoutineLoaded =
-    todayPlan?.routineId != null && loadedRoutineId === todayPlan.routineId;
+  const todayRoutineId = todayPlan?.events.find((event) => event.routineId)?.routineId ?? null;
+  const todayRoutineLoaded = todayRoutineId != null && loadedRoutineId === todayRoutineId;
 
   useEffect(() => {
     if (restTimer.phase === "finished") {
@@ -136,8 +136,9 @@ export default function TrainScreen() {
   const loadTodayRoutine = useCallback(() => {
     const todayIndex = mondayFirstIndex(new Date().getDay());
     const todayPlan = schedule[todayIndex];
-    if (!todayPlan || todayPlan.isRest || !todayPlan.routineId) return;
-    const saved = routines.find((item) => item.id === todayPlan.routineId);
+    const todayEvent = todayPlan?.events.find((event) => event.routineId);
+    if (!todayPlan || todayPlan.isRest || !todayEvent?.routineId) return;
+    const saved = routines.find((item) => item.id === todayEvent.routineId);
     if (!saved) return;
     setSessionRoutine({
       name: saved.name,

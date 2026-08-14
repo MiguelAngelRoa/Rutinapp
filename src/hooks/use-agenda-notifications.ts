@@ -91,12 +91,24 @@ export function useAgendaNotifications() {
       if (!active) return;
       const token = ++syncTokenRef.current;
       try {
-        // Only cancel the agenda reminders we scheduled last time, never all
-        // notifications (that would also wipe the rest-finished alert).
+        // Cancel every agenda reminder before re-scheduling: the ones we
+        // scheduled this session plus any leftover from previous sessions
+        // (e.g. after the reminder time changed). Rest-finish alerts are left
+        // untouched by filtering on `data.kind === 'agenda'`.
         const previousIds = scheduledIdsRef.current;
         scheduledIdsRef.current = new Set();
+        const allScheduled = await Notifications.getAllScheduledNotificationsAsync().catch(
+          () => null,
+        );
+        const agendaIds =
+          allScheduled == null
+            ? []
+            : allScheduled
+                .filter((n) => n.content.data?.kind === 'agenda')
+                .map((n) => n.identifier);
+        const idsToCancel = [...new Set([...previousIds, ...agendaIds])];
         await Promise.all(
-          [...previousIds].map((id) =>
+          idsToCancel.map((id) =>
             Notifications.cancelScheduledNotificationAsync(id).catch(() => {
               // Best-effort: the notification may already have fired.
             }),

@@ -22,11 +22,10 @@ export default function ScheduleScreen() {
   const safeAreaInsets = useSafeAreaInsets();
   const { schedule, routines } = useWorkout();
   const [editingDay, setEditingDay] = useState<number | null>(null);
+  const [pressedDay, setPressedDay] = useState<number | null>(null);
 
   const todayIndex = mondayFirstIndex(new Date().getDay());
-  const trainingCount = schedule.filter(
-    (day) => !day.isRest && (day.routineId != null || (day.activity ?? '').trim().length > 0),
-  ).length;
+  const trainingCount = schedule.filter((day) => !day.isRest && day.events.length > 0).length;
   const restCount = schedule.filter((day) => day.isRest).length;
 
   const insets = {
@@ -58,21 +57,25 @@ export default function ScheduleScreen() {
           <View style={styles.days}>
             {schedule.map((day, index) => {
               const isToday = index === todayIndex;
-              const routine = day.routineId
-                ? routines.find((item) => item.id === day.routineId)
-                : null;
               return (
                 <Pressable
                   key={index}
                   accessibilityRole="button"
                   onPress={() => setEditingDay(index)}
-                  style={({ pressed }) => [
+                  onPressIn={() => setPressedDay(index)}
+                  onPressOut={() => setPressedDay(null)}
+                  android_ripple={{ color: "rgba(163, 230, 53, 0.3)", borderless: false }}
+                  style={[
                     styles.dayCard,
                     {
-                      borderColor: isToday ? theme.accent : theme.border,
-                      backgroundColor: isToday ? theme.backgroundSelected : "transparent",
+                      borderColor: pressedDay === index || isToday ? theme.accent : theme.border,
+                      backgroundColor:
+                        pressedDay === index
+                          ? "rgba(163, 230, 53, 0.5)"
+                          : isToday
+                            ? theme.backgroundSelected
+                            : "transparent",
                     },
-                    pressed && styles.pressed,
                   ]}
                 >
                   <View style={styles.dayHeader}>
@@ -101,27 +104,32 @@ export default function ScheduleScreen() {
                     >
                       Descanso
                     </ThemedText>
-                  ) : routine ? (
+                  ) : day.events.length > 0 ? (
                     <View style={styles.dayInfo}>
-                      <ThemedText type="smallBold" numberOfLines={1}>
-                        {routine.name}
-                      </ThemedText>
-                      <ThemedText type="small" themeColor="textSecondary">
-                        {day.startTime
-                          ? formatTime12(day.startTime.hour, day.startTime.minute)
-                          : "Sin hora"}
-                      </ThemedText>
-                    </View>
-                  ) : (day.activity ?? '').trim() ? (
-                    <View style={styles.dayInfo}>
-                      <ThemedText type="smallBold" numberOfLines={1}>
-                        {day.activity}
-                      </ThemedText>
-                      <ThemedText type="small" themeColor="textSecondary">
-                        {day.startTime
-                          ? formatTime12(day.startTime.hour, day.startTime.minute)
-                          : "Sin hora"}
-                      </ThemedText>
+                      {day.events.slice(0, 3).map((event) => {
+                        const label = event.routineId
+                          ? routines.find((item) => item.id === event.routineId)?.name
+                          : event.activity;
+                        return (
+                          <View key={event.id} style={styles.eventRow}>
+                            <ThemedText
+                              type="small"
+                              themeColor="textSecondary"
+                              style={styles.eventTime}
+                            >
+                              {formatTime12(event.startTime.hour, event.startTime.minute)}
+                            </ThemedText>
+                            <ThemedText type="smallBold" numberOfLines={1}>
+                              {label}
+                            </ThemedText>
+                          </View>
+                        );
+                      })}
+                      {day.events.length > 3 && (
+                        <ThemedText type="small" themeColor="textSecondary">
+                          +{day.events.length - 3} más
+                        </ThemedText>
+                      )}
                     </View>
                   ) : (
                     <ThemedText type="small" themeColor="textSecondary">
@@ -206,10 +214,16 @@ const styles = StyleSheet.create({
   dayInfo: {
     gap: Spacing.half,
   },
+  eventRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.two,
+  },
+  eventTime: {
+    fontVariant: ["tabular-nums"],
+    width: 64,
+  },
   note: {
     color: "#9CA3AF",
-  },
-  pressed: {
-    opacity: 0.7,
   },
 });

@@ -8,8 +8,12 @@ import {
   DEFAULT_ROUTINE,
   createExercise,
   createEmptyWeek,
+  createDayEvent,
+  createEmptyDayPlan,
   isExercise,
   isRoutine,
+  nextHour,
+  type DayEvent,
   type DayPlan,
   type Exercise,
   type Routine,
@@ -21,7 +25,9 @@ import { localDateKey } from '@/utils/format';
 
 const STORAGE_KEY = 'rutinapp:routines:v1';
 const LEGACY_KEY = 'rutinapp:routine:v2';
-const SCHEDULE_KEY = 'rutinapp:schedule:v1';
+const SCHEDULE_KEY = 'rutinapp:schedule:v2';
+/** Previous single-event-per-day schedule format. */
+const SCHEDULE_KEY_V1 = 'rutinapp:schedule:v1';
 const ACTIVITIES_KEY = 'rutinapp:activities:v1';
 const PLAN_DISMISSAL_KEY = 'rutinapp:dismissed-plan-date:v1';
 
@@ -41,6 +47,14 @@ type WorkoutContextValue = {
   updateExercise: (id: string, patch: Partial<Exercise>) => void;
   clearRoutine: () => void;
   updateDay: (index: number, patch: Partial<DayPlan>) => void;
+  addDayEvent: (index: number, event: Omit<DayEvent, 'id'>) => void;
+  updateDayEvent: (
+    index: number,
+    eventId: string,
+    patch: Partial<Omit<DayEvent, 'id'>>,
+  ) => void;
+  removeDayEvent: (index: number, eventId: string) => void;
+  resetDay: (index: number) => void;
   addActivity: (name: string) => void;
   saveRoutine: (name: string) => { id: string; overwrote: boolean };
   loadRoutine: (id: string) => void;
@@ -116,28 +130,71 @@ function parseActivities(value: unknown): string[] {
   return result;
 }
 
+function isDayEvent(value: unknown): value is DayEvent {
+  if (typeof value !== 'object' || value == null) return false;
+  const event = value as Partial<DayEvent>;
+  return (
+    (event.routineId == null || typeof event.routineId === 'string') &&
+    (event.activity == null || typeof event.activity === 'string') &&
+    isTimeOfDay(event.startTime)
+  );
+}
+
 function isDayPlan(value: unknown): value is DayPlan {
   if (typeof value !== 'object' || value == null) return false;
   const day = value as Partial<DayPlan>;
   return (
-    (day.routineId == null || typeof day.routineId === 'string') &&
-    (day.activity == null || typeof day.activity === 'string') &&
-    (day.startTime == null || isTimeOfDay(day.startTime)) &&
+    Array.isArray(day.events) &&
+    day.events.every(isDayEvent) &&
     typeof day.isRest === 'boolean' &&
     typeof day.notes === 'string'
   );
 }
 
+/**
+ * Converts a legacy v1 day (single routine/activity with one startTime) into
+ * the current DayPlan shape so existing schedules are not lost.
+ */
+function migrateLegacyDay(value: unknown): DayPlan | null {
+  if (typeof value !== 'object' || value == null) return null;
+  const day = value as Partial<DayPlan> & {
+    routineId?: unknown;
+    activity?: unknown;
+    startTime?: unknown;
+  };
+  const isRest = typeof day.isRest === 'boolean' ? day.isRest : false;
+  const notes = typeof day.notes === 'string' ? day.notes : '';
+  if (isRest) return { events: [], isRest: true, notes };
+
+  const startTime =
+    day.startTime != null && isTimeOfDay(day.startTime)
+      ? day.startTime
+      : { hour: 7, minute: 0 };
+  const routineId = typeof day.routineId === 'string' ? day.routineId : null;
+  const activity = typeof day.activity === 'string' ? day.activity : '';
+  const hasEvent = routineId != null || activity.trim().length > 0;
+  return {
+    events: hasEvent ? [createDayEvent(startTime, { routineId, activity })] : [],
+    isRest: false,
+    notes,
+  };
+}
+
 function parseSchedule(value: unknown): WeekSchedule | null {
   if (!Array.isArray(value) || value.length !== 7) return null;
-  if (!value.every(isDayPlan)) return null;
-  return value.map((day) => ({
-    routineId: day.routineId,
-    activity: day.activity ?? '',
-    startTime: day.startTime,
-    isRest: day.isRest,
-    notes: day.notes,
-  }));
+  if (value.every(isDayPlan)) {
+    return value.map((day) => ({
+      events: day.events.map((event) => ({
+        ...event,
+        endTime: isTimeOfDay(event.endTime) ? event.endTime : nextHour(event.startTime),
+      })),
+      isRest: day.isRest,
+      notes: day.notes,
+    }));
+  }
+  const migrated = value.map(migrateLegacyDay);
+  if (migrated.some((day) => day == null)) return null;
+  return migrated as WeekSchedule;
 }
 
 export function WorkoutProvider({ children }: { children: ReactNode }) {
@@ -182,8 +239,14 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
         }
 
         const scheduleStored = await AsyncStorage.getItem(SCHEDULE_KEY);
-        const restoredSchedule =
+        let restoredSchedule =
           scheduleStored != null ? parseSchedule(JSON.parse(scheduleStored)) : null;
+        if (!restoredSchedule) {
+          const legacyScheduleStored = await AsyncStorage.getItem(SCHEDULE_KEY_V1);
+          if (legacyScheduleStored != null) {
+            restoredSchedule = parseSchedule(JSON.parse(legacyScheduleStored));
+          }
+        }
         if (restoredSchedule) nextSchedule = restoredSchedule;
 
         const activitiesStored = await AsyncStorage.getItem(ACTIVITIES_KEY);
@@ -266,6 +329,49 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
         setSchedule((current) =>
           current.map((day, i) => (i === index ? { ...day, ...patch } : day)),
         ),
+      addDayEvent: (index, event) =>
+        setSchedule((current) =>
+          current.map((day, i) =>
+            i === index
+              ? {
+                  ...day,
+                  events: [
+                    ...day.events,
+                    createDayEvent(event.startTime, {
+                      routineId: event.routineId,
+                      activity: event.activity,
+                      endTime: event.endTime,
+                    }),
+                  ],
+                }
+              : day,
+          ),
+        ),
+      updateDayEvent: (index, eventId, patch) =>
+        setSchedule((current) =>
+          current.map((day, i) =>
+            i === index
+              ? {
+                  ...day,
+                  events: day.events.map((event) =>
+                    event.id === eventId ? { ...event, ...patch } : event,
+                  ),
+                }
+              : day,
+          ),
+        ),
+      removeDayEvent: (index, eventId) =>
+        setSchedule((current) =>
+          current.map((day, i) =>
+            i === index
+              ? { ...day, events: day.events.filter((event) => event.id !== eventId) }
+              : day,
+          ),
+        ),
+      resetDay: (index) =>
+        setSchedule((current) =>
+          current.map((day, i) => (i === index ? createEmptyDayPlan() : day)),
+        ),
       addActivity: (name) => {
         const trimmed = name.trim();
         if (!trimmed) return;
@@ -304,7 +410,12 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
         setRoutines((current) => current.filter((item) => item.id !== id));
         setActiveRoutineId((current) => (current === id ? null : current));
         setSchedule((current) =>
-          current.map((day) => (day.routineId === id ? { ...day, routineId: null } : day)),
+          current.map((day) => ({
+            ...day,
+            events: day.events.map((event) =>
+              event.routineId === id ? { ...event, routineId: null } : event,
+            ),
+          })),
         );
       },
       importRoutine: (routine) => {

@@ -23,11 +23,19 @@ export type TimeOfDay = {
   minute: number;
 };
 
-export type DayPlan = {
+export type DayEvent = {
+  id: string;
+  startTime: TimeOfDay;
+  /** Exclusive end of the event (the last occupied hour row is `endTime.hour - 1`). */
+  endTime: TimeOfDay;
   routineId: string | null;
   /** Custom activity label that doesn't reference a saved routine, e.g. "Jiu Jitsu". */
   activity: string;
-  startTime: TimeOfDay | null;
+};
+
+export type DayPlan = {
+  /** Scheduled events for the day (one per hour). */
+  events: DayEvent[];
   isRest: boolean;
   notes: string;
 };
@@ -78,11 +86,27 @@ export const WEEKDAY_NAMES = [
 
 export function createEmptyDayPlan(): DayPlan {
   return {
-    routineId: null,
-    activity: '',
-    startTime: null,
+    events: [],
     isRest: false,
     notes: '',
+  };
+}
+
+/** One hour after the given time (wraps to 0 after 23). */
+export function nextHour(time: TimeOfDay): TimeOfDay {
+  return { hour: (time.hour + 1) % 24, minute: time.minute };
+}
+
+export function createDayEvent(
+  startTime: TimeOfDay,
+  partial: Partial<Omit<DayEvent, 'id' | 'startTime'>> = {},
+): DayEvent {
+  return {
+    id: createId(),
+    startTime: { ...startTime },
+    endTime: partial.endTime ? { ...partial.endTime } : nextHour(startTime),
+    routineId: partial.routineId ?? null,
+    activity: partial.activity ?? '',
   };
 }
 

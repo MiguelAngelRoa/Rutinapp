@@ -20,6 +20,34 @@ export function weekdayForScheduleIndex(index: number): number {
   return ((index + 1) % 7) + 1;
 }
 
+/** Minutes before an event start time that the reminder fires. */
+const REMINDER_MINUTES = 30;
+
+/**
+ * Weekly slot for a reminder that fires `REMINDER_MINUTES` before the event.
+ * Events starting inside the first `REMINDER_MINUTES` of the day roll the
+ * reminder back to the previous weekday (e.g. Monday 00:00 -> Sunday 23:30).
+ */
+function reminderSlot(
+  dayIndex: number,
+  hour: number,
+  minute: number,
+): { weekday: number; hour: number; minute: number } {
+  const minutesBefore = hour * 60 + minute - REMINDER_MINUTES;
+  if (minutesBefore < 0) {
+    return {
+      weekday: weekdayForScheduleIndex((dayIndex + 6) % 7),
+      hour: 23,
+      minute: 60 + minutesBefore,
+    };
+  }
+  return {
+    weekday: weekdayForScheduleIndex(dayIndex),
+    hour: Math.floor(minutesBefore / 60),
+    minute: minutesBefore % 60,
+  };
+}
+
 export function buildAgendaNotifications(
   schedule: WeekSchedule,
   routines: SavedRoutine[],
@@ -27,36 +55,39 @@ export function buildAgendaNotifications(
   const result: AgendaNotification[] = [];
 
   schedule.forEach((day, dayIndex) => {
-    if (day.isRest || !day.startTime) return;
+    if (day.isRest) return;
 
-    const time = formatTime12(day.startTime.hour, day.startTime.minute);
+    day.events.forEach((event) => {
+      const slot = reminderSlot(dayIndex, event.startTime.hour, event.startTime.minute);
+      const time = formatTime12(event.startTime.hour, event.startTime.minute);
 
-    if (day.routineId) {
-      const routine = routines.find((item) => item.id === day.routineId);
-      result.push({
-        id: `agenda-${dayIndex}`,
-        weekday: weekdayForScheduleIndex(dayIndex),
-        hour: day.startTime.hour,
-        minute: day.startTime.minute,
-        title: '¡Hora de entrenar!',
-        body: routine ? `${routine.name} a las ${time}` : `Entrenamiento a las ${time}`,
-        data: { kind: 'agenda', dayIndex, routineId: day.routineId },
-      });
-      return;
-    }
+      if (event.routineId) {
+        const routine = routines.find((item) => item.id === event.routineId);
+        result.push({
+          id: `agenda-${dayIndex}-${event.id}`,
+          weekday: slot.weekday,
+          hour: slot.hour,
+          minute: slot.minute,
+          title: '¡Hora de entrenar!',
+          body: routine ? `${routine.name} a las ${time}` : `Entrenamiento a las ${time}`,
+          data: { kind: 'agenda', dayIndex, routineId: event.routineId },
+        });
+        return;
+      }
 
-    const activity = (day.activity ?? '').trim();
-    if (activity) {
-      result.push({
-        id: `agenda-${dayIndex}`,
-        weekday: weekdayForScheduleIndex(dayIndex),
-        hour: day.startTime.hour,
-        minute: day.startTime.minute,
-        title: `¡Hora de ${activity}!`,
-        body: `Tienes ${activity} a las ${time}.`,
-        data: { kind: 'agenda', dayIndex, routineId: null },
-      });
-    }
+      const activity = (event.activity ?? '').trim();
+      if (activity) {
+        result.push({
+          id: `agenda-${dayIndex}-${event.id}`,
+          weekday: slot.weekday,
+          hour: slot.hour,
+          minute: slot.minute,
+          title: `¡Hora de ${activity}!`,
+          body: `Tienes ${activity} a las ${time}.`,
+          data: { kind: 'agenda', dayIndex, routineId: null },
+        });
+      }
+    });
   });
 
   return result;

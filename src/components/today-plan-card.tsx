@@ -61,16 +61,16 @@ export function TodayPlanCard({ isLoaded, onLoadRoutine, onDismiss }: TodayPlanC
   const day = schedule[todayIndex];
   if (!day) return null;
 
-  const routine = day.routineId
-    ? routines.find((item) => item.id === day.routineId)
+  const routineEvent = day.events.find((event) => event.routineId);
+  const event = routineEvent ?? day.events[0];
+  const routine = event?.routineId
+    ? routines.find((item) => item.id === event.routineId)
     : null;
-  const activity = (day.activity ?? "").trim();
-  const hasPlan = day.isRest || routine != null || activity.length > 0;
+  const activity = (event?.activity ?? "").trim();
+  const hasPlan = day.isRest || day.events.length > 0;
   if (!hasPlan) return null;
 
-  const timeLabel = day.startTime
-    ? formatTime12(day.startTime.hour, day.startTime.minute)
-    : null;
+  const timeLabel = event ? formatTime12(event.startTime.hour, event.startTime.minute) : null;
 
   const cardStyle = [
     styles.card,
@@ -95,7 +95,7 @@ export function TodayPlanCard({ isLoaded, onLoadRoutine, onDismiss }: TodayPlanC
             {day.isRest ? "Hoy" : "Hoy toca"}
           </ThemedText>
           <ThemedText type="smallBold" numberOfLines={1}>
-            {day.isRest ? "Día de descanso" : (routine?.name ?? activity)}
+            {day.isRest ? "Día de descanso" : (routine?.name ?? activity ?? "Actividad")}
           </ThemedText>
           {timeLabel && (
             <ThemedText type="small" themeColor="textSecondary">
