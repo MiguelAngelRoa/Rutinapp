@@ -10,11 +10,7 @@
     "ios": {
       "icon": "./assets/images/icon.png",
       "infoPlist": {
-        "UIBackgroundModes": [
-          "audio",
-          "fetch",
-          "remote-notification"
-        ]
+        "UIBackgroundModes": ["audio", "fetch", "remote-notification"]
       }
     },
     "android": {
@@ -24,17 +20,13 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "permissions": [
-        "NOTIFICATIONS"
-      ],
+      "permissions": ["NOTIFICATIONS"],
       "predictiveBackGestureEnabled": false,
       "package": "com.miguelangelroa.rutinapp",
       "intentFilters": [
         {
           "action": "VIEW",
-          "category": [
-            "DEFAULT"
-          ],
+          "category": ["DEFAULT"],
           "data": [
             {
               "scheme": "content",
@@ -44,9 +36,7 @@
         },
         {
           "action": "VIEW",
-          "category": [
-            "DEFAULT"
-          ],
+          "category": ["DEFAULT"],
           "data": [
             {
               "scheme": "content",
@@ -57,9 +47,7 @@
         },
         {
           "action": "VIEW",
-          "category": [
-            "DEFAULT"
-          ],
+          "category": ["DEFAULT"],
           "data": [
             {
               "scheme": "content",
@@ -102,9 +90,6 @@
       "eas": {
         "projectId": "42c97056-1f60-474f-9664-fa9d14bcc115"
       }
-    },
-    "devClient": {
-      "development": true
     }
   }
 }
