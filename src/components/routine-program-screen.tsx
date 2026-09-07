@@ -1,18 +1,23 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useState } from "react";
 import {
+  Keyboard,
   Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   TextInput,
   View,
 } from "react-native";
+import Animated, {
+  useAnimatedRef,
+  useSharedValue,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ExerciseRow } from "@/components/exercise-row";
 import { RoutineSaveDialog } from "@/components/routine-save-dialog";
 import { RoutineSidebar } from "@/components/routine-sidebar";
+import { SortableExerciseList } from "@/components/sortable-exercise-list";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Button } from "@/components/ui/button";
@@ -26,13 +31,19 @@ import {
 import { useWorkout } from "@/context/workout-context";
 import { useTheme } from "@/hooks/use-theme";
 
-export default function RoutineScreen() {
+type RoutineProgramScreenProps = {
+  /** Overrides the top inset (safe area + web TopInset) when embedded below a header. */
+  contentTopInset?: number;
+};
+
+export function RoutineProgramScreen({ contentTopInset }: RoutineProgramScreenProps) {
   const {
     routine,
     updateRoutineName,
     addExercise,
     removeExercise,
     updateExercise,
+    moveExercise,
     clearRoutine,
   } = useWorkout();
   const theme = useTheme();
@@ -40,6 +51,13 @@ export default function RoutineScreen() {
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [saveVisible, setSaveVisible] = useState(false);
   const [newRoutineVisible, setNewRoutineVisible] = useState(false);
+  const [scrollEnabled, setScrollEnabled] = useState(true);
+
+  const scrollRef = useAnimatedRef<Animated.ScrollView>();
+  const scrollOffset = useSharedValue(0);
+  const scrollViewportHeight = useSharedValue(0);
+  const scrollContentHeight = useSharedValue(0);
+  const scrollWindowTop = useSharedValue(0);
 
   const totalSets = routine.exercises.reduce(
     (sum, exercise) => sum + exercise.sets,
@@ -47,13 +65,22 @@ export default function RoutineScreen() {
   );
 
   const insets = {
-    top: safeAreaInsets.top + TopInset,
+    top: contentTopInset ?? safeAreaInsets.top + TopInset,
     bottom: safeAreaInsets.bottom + BottomTabInset + Spacing.four,
   };
 
   return (
     <View style={styles.screen}>
-      <ScrollView
+      <Animated.ScrollView
+        ref={scrollRef}
+        scrollEnabled={scrollEnabled}
+        scrollViewOffset={scrollOffset}
+        onContentSizeChange={(_, height) => {
+          scrollContentHeight.value = height;
+        }}
+        onLayout={(event) => {
+          scrollViewportHeight.value = event.nativeEvent.layout.height;
+        }}
         style={[styles.scrollView, { backgroundColor: theme.background }]}
         contentContainerStyle={[
           styles.contentContainer,
@@ -141,14 +168,27 @@ export default function RoutineScreen() {
           </View>
 
           <View style={styles.exercises}>
-            {routine.exercises.map((exercise) => (
-              <ExerciseRow
-                key={exercise.id}
-                exercise={exercise}
-                onChange={(patch) => updateExercise(exercise.id, patch)}
-                onDelete={() => removeExercise(exercise.id)}
-              />
-            ))}
+            <SortableExerciseList
+              exercises={routine.exercises}
+              onReorder={moveExercise}
+              onScrollEnabledChange={setScrollEnabled}
+              onDragStateChange={(index) => {
+                if (index >= 0) Keyboard.dismiss();
+              }}
+              scrollRef={scrollRef}
+              scrollOffset={scrollOffset}
+              scrollViewportHeight={scrollViewportHeight}
+              scrollWindowTop={scrollWindowTop}
+              scrollContentHeight={scrollContentHeight}
+              renderItem={(exercise, isDragging) => (
+                <ExerciseRow
+                  exercise={exercise}
+                  isDragging={isDragging}
+                  onChange={(patch) => updateExercise(exercise.id, patch)}
+                  onDelete={() => removeExercise(exercise.id)}
+                />
+              )}
+            />
 
             {routine.exercises.length === 0 && (
               <View style={[styles.empty, { borderColor: theme.border }]}>
@@ -183,7 +223,7 @@ export default function RoutineScreen() {
             </Pressable>
           </View>
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
 
       <RoutineSidebar
         visible={sidebarVisible}

@@ -11,6 +11,7 @@ import AppTabs from "@/components/app-tabs";
 import { NotificationPermissionBanner } from "@/components/notification-permission-banner";
 import { RoutineImportDialog } from "@/components/routine-import-dialog";
 import { RoutineImportLink } from "@/components/routine-import-link";
+import { ModeProvider } from "@/context/mode-context";
 import { WorkoutProvider } from "@/context/workout-context";
 
 SplashScreen.preventAutoHideAsync();
@@ -33,12 +34,14 @@ export default function TabLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider value={AppTheme}>
         <WorkoutProvider>
-          <AgendaNotifications />
-          <AnimatedSplashOverlay />
-          <AppTabs />
-          <NotificationPermissionBanner />
-          <RoutineImportLink />
-          <RoutineImportDialog />
+          <ModeProvider>
+            <AgendaNotifications />
+            <AnimatedSplashOverlay />
+            <AppTabs />
+            <NotificationPermissionBanner />
+            <RoutineImportLink />
+            <RoutineImportDialog />
+          </ModeProvider>
         </WorkoutProvider>
       </ThemeProvider>
     </GestureHandlerRootView>

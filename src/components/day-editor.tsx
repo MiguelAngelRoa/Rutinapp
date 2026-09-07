@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Radius, Spacing } from '@/constants/theme';
 import { useWorkout } from '@/context/workout-context';
 import { useTheme } from '@/hooks/use-theme';
-import { createEmptyDayPlan, WEEKDAY_NAMES, type DayEvent } from '@/types/workout';
+import { createEmptyDayPlan, WEEKDAY_NAMES, type DayEvent, type DayEventContent } from '@/types/workout';
 import { formatTime12 } from '@/utils/format';
 
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
@@ -69,6 +69,8 @@ export function DayEditor({ visible, dayIndex, onClose }: DayEditorProps) {
   const [draft, setDraft] = useState<SlotDraft | null>(null);
   const [routinePickerVisible, setRoutinePickerVisible] = useState(false);
   const [activityPickerVisible, setActivityPickerVisible] = useState(false);
+  const [runnerPickerVisible, setRunnerPickerVisible] = useState(false);
+  const [runKmDraft, setRunKmDraft] = useState('');
   const [selectionActive, setSelectionActive] = useState(false);
   const [pressedHour, setPressedHour] = useState<number | null>(null);
   const [debugText, setDebugText] = useState('');
@@ -229,7 +231,7 @@ export function DayEditor({ visible, dayIndex, onClose }: DayEditorProps) {
     setDraft({ fromHour: hour, toHour: hour, eventId: null });
   };
 
-  const handleAddEvent = (event: { routineId: string | null; activity: string }) => {
+  const handleAddEvent = (event: DayEventContent) => {
     if (!draft) return;
     if (draft.eventId) {
       updateDayEvent(dayIndex, draft.eventId, event);
@@ -241,6 +243,23 @@ export function DayEditor({ visible, dayIndex, onClose }: DayEditorProps) {
       });
     }
     closeChooser();
+  };
+
+  const openRunnerPicker = () => {
+    const existing = draft?.eventId
+      ? day.events.find((event) => event.id === draft.eventId)
+      : null;
+    setRunKmDraft(
+      existing?.kind === 'run' && existing.kmGoal != null ? String(existing.kmGoal) : '',
+    );
+    setRunnerPickerVisible(true);
+  };
+
+  const handleAddRun = () => {
+    const km = parseFloat(runKmDraft.replace(',', '.'));
+    const kmGoal = Number.isFinite(km) && km > 0 ? km : null;
+    handleAddEvent({ kind: 'run', routineId: null, activity: '', kmGoal });
+    setRunnerPickerVisible(false);
   };
 
   const handleDeleteEvent = () => {
@@ -473,6 +492,11 @@ export function DayEditor({ visible, dayIndex, onClose }: DayEditorProps) {
                         label="Actividad"
                         onPress={() => setActivityPickerVisible(true)}
                       />
+                      <ChooserOption
+                        icon="run"
+                        label="Correr"
+                        onPress={openRunnerPicker}
+                      />
                       {draft.eventId && (
                         <ChooserOption
                           icon="trash-can-outline"
@@ -502,7 +526,9 @@ export function DayEditor({ visible, dayIndex, onClose }: DayEditorProps) {
                     ? (day.events.find((event) => event.id === draft.eventId)?.routineId ?? null)
                     : null
                 }
-                onSelect={(routineId) => handleAddEvent({ routineId, activity: '' })}
+                onSelect={(routineId) =>
+                  handleAddEvent({ kind: 'routine', routineId, activity: '', kmGoal: null })
+                }
                 onCancel={() => setRoutinePickerVisible(false)}
               />
             )}
@@ -513,9 +539,67 @@ export function DayEditor({ visible, dayIndex, onClose }: DayEditorProps) {
                     ? (day.events.find((event) => event.id === draft.eventId)?.activity ?? '')
                     : ''
                 }
-                onSelect={(activity) => handleAddEvent({ routineId: null, activity })}
+                onSelect={(activity) =>
+                  handleAddEvent({ kind: 'activity', routineId: null, activity, kmGoal: null })
+                }
                 onCancel={() => setActivityPickerVisible(false)}
               />
+            )}
+            {runnerPickerVisible && (
+              <View style={styles.overlay}>
+                <View style={styles.center}>
+                  <ThemedView
+                    type="backgroundElement"
+                    style={[styles.card, { borderColor: theme.border }]}
+                  >
+                    <ThemedText type="heading" style={styles.title}>
+                      {draft?.eventId ? 'Editar meta' : 'Correr'}
+                    </ThemedText>
+                    <ThemedText
+                      type="small"
+                      themeColor="textSecondary"
+                      style={styles.title}
+                    >
+                      ¿Cuántos kilómetros quieres recorrer?
+                    </ThemedText>
+
+                    <View style={styles.kmRow}>
+                      <TextInput
+                        value={runKmDraft}
+                        onChangeText={setRunKmDraft}
+                        keyboardType="decimal-pad"
+                        placeholder="p. ej. 5"
+                        placeholderTextColor={theme.textSecondary}
+                        autoFocus
+                        style={[
+                          styles.kmInput,
+                          { color: theme.text, borderColor: theme.border },
+                        ]}
+                      />
+                      <ThemedText type="smallBold" themeColor="textSecondary">
+                        km
+                      </ThemedText>
+                    </View>
+
+                    <View style={styles.kmActions}>
+                      <Button
+                        label="Cancelar"
+                        variant="ghost"
+                        size="md"
+                        onPress={() => setRunnerPickerVisible(false)}
+                        style={styles.kmButton}
+                      />
+                      <Button
+                        label="Guardar"
+                        variant="primary"
+                        size="md"
+                        onPress={handleAddRun}
+                        style={styles.kmButton}
+                      />
+                    </View>
+                  </ThemedView>
+                </View>
+              </View>
             )}
           </View>
         )}
@@ -533,12 +617,13 @@ function EventBlock({ event, onPress }: EventBlockProps) {
   const theme = useTheme();
   const { routines } = useWorkout();
 
-  const routine = event.routineId
+  const isRun = event.kind === 'run';
+  const isRoutine = event.routineId != null && !isRun;
+  const routine = !isRun && event.routineId
     ? routines.find((item) => item.id === event.routineId)
     : null;
-  const label = routine ? routine.name : event.activity;
-  const isRoutine = routine != null;
-  const barColor = isRoutine ? theme.accent : theme.success;
+  const label = isRun ? 'Correr' : routine ? routine.name : event.activity;
+  const barColor = isRun ? theme.accent : isRoutine ? theme.accent : theme.success;
 
   const top = event.startTime.hour * ROW_HEIGHT + Spacing.one;
   const height = eventSpanHours(event) * ROW_HEIGHT - Spacing.one * 2;
@@ -552,14 +637,14 @@ function EventBlock({ event, onPress }: EventBlockProps) {
         {
           top,
           height,
-          backgroundColor: isRoutine ? theme.accentSoft : theme.successSoft,
+          backgroundColor: isRun || isRoutine ? theme.accentSoft : theme.successSoft,
           borderLeftColor: barColor,
         },
         pressed && styles.pressed,
       ]}
     >
       <MaterialCommunityIcons
-        name={isRoutine ? 'dumbbell' : 'calendar-check'}
+        name={isRun ? 'run' : isRoutine ? 'dumbbell' : 'calendar-check'}
         size={16}
         color={barColor}
       />
@@ -570,6 +655,7 @@ function EventBlock({ event, onPress }: EventBlockProps) {
         <ThemedText type="small" themeColor="textSecondary" style={styles.eventTime}>
           {formatTime12(event.startTime.hour, event.startTime.minute)} –{' '}
           {formatTime12(event.endTime.hour, event.endTime.minute)}
+          {isRun && event.kmGoal != null ? ` · meta ${event.kmGoal} km` : ''}
         </ThemedText>
       </View>
       <MaterialCommunityIcons name="chevron-right" size={16} color={theme.textSecondary} />
@@ -636,6 +722,29 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     alignSelf: 'stretch',
+  },
+  kmRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.three,
+  },
+  kmInput: {
+    flex: 1,
+    minHeight: 44,
+    fontSize: 20,
+    fontWeight: 700,
+    textAlign: 'center',
+    fontVariant: ['tabular-nums'],
+  },
+  kmActions: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  kmButton: {
+    flex: 1,
   },
   chooserOptions: {
     gap: Spacing.two,

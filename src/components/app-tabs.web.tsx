@@ -1,29 +1,58 @@
 import { Tabs, TabList, TabTrigger, TabSlot, TabTriggerSlotProps, TabListProps } from 'expo-router/ui';
+import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from './themed-text';
 import { ThemedView } from './themed-view';
 
+import { ModeMenu } from '@/components/mode-menu';
 import { MaxContentWidth, Radius, Shadow, Spacing } from '@/constants/theme';
+import { useMode } from '@/context/mode-context';
 import { useTheme } from '@/hooks/use-theme';
 
 export default function AppTabs() {
+  const { mode } = useMode();
+  const isRunner = mode === 'runner';
+  const [menuVisible, setMenuVisible] = useState(false);
+
   return (
     <Tabs>
       <TabSlot style={{ height: '100%' }} />
       <TabList asChild>
         <CustomTabList>
-          <TabTrigger name="home" href="/" asChild>
-            <TabButton>Entrenar</TabButton>
-          </TabTrigger>
-          <TabTrigger name="explore" href="/explore" asChild>
-            <TabButton>Rutina</TabButton>
-          </TabTrigger>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Cambiar modo"
+            onPress={() => setMenuVisible(true)}
+            style={({ pressed }) => pressed && styles.pressed}
+          >
+            <ThemedView style={styles.tabButtonView}>
+              <ThemedText type="smallBold" themeColor="textSecondary">
+                Modos
+              </ThemedText>
+            </ThemedView>
+          </Pressable>
+          {!isRunner && (
+            <>
+              <TabTrigger name="routine" href="/routine" asChild>
+                <TabButton>Rutina</TabButton>
+              </TabTrigger>
+              <TabTrigger name="program" href="/program" asChild>
+                <TabButton>Programa</TabButton>
+              </TabTrigger>
+            </>
+          )}
+          {isRunner && (
+            <TabTrigger name="runner" href="/runner" asChild>
+              <TabButton>Runner</TabButton>
+            </TabTrigger>
+          )}
           <TabTrigger name="schedule" href="/schedule" asChild>
             <TabButton>Agenda</TabButton>
           </TabTrigger>
         </CustomTabList>
       </TabList>
+      <ModeMenu visible={menuVisible} onClose={() => setMenuVisible(false)} />
     </Tabs>
   );
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { RestTimePicker } from '@/components/rest-time-picker';
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/card';
@@ -13,15 +14,25 @@ type ExerciseRowProps = {
   exercise: Exercise;
   onChange: (patch: Partial<Exercise>) => void;
   onDelete: () => void;
+  isDragging?: boolean;
 };
 
-export function ExerciseRow({ exercise, onChange, onDelete }: ExerciseRowProps) {
+export function ExerciseRow({ exercise, onChange, onDelete, isDragging = false }: ExerciseRowProps) {
   const theme = useTheme();
   const [pickerVisible, setPickerVisible] = useState(false);
 
   return (
-    <Card style={styles.row}>
+    <Card
+      style={[
+        styles.row,
+        isDragging && { borderColor: theme.accent, elevation: 8 },
+      ]}>
       <View style={styles.header}>
+        <MaterialCommunityIcons
+          name={isDragging ? 'drag-horizontal' : 'drag'}
+          size={22}
+          color={isDragging ? theme.accent : theme.textSecondary}
+        />
         <TextInput
           value={exercise.name}
           onChangeText={(name) => onChange({ name })}

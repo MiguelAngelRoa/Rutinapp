@@ -45,6 +45,7 @@ type WorkoutContextValue = {
   addExercise: () => void;
   removeExercise: (id: string) => void;
   updateExercise: (id: string, patch: Partial<Exercise>) => void;
+  moveExercise: (fromIndex: number, toIndex: number) => void;
   clearRoutine: () => void;
   updateDay: (index: number, patch: Partial<DayPlan>) => void;
   addDayEvent: (index: number, event: Omit<DayEvent, 'id'>) => void;
@@ -134,10 +135,27 @@ function isDayEvent(value: unknown): value is DayEvent {
   if (typeof value !== 'object' || value == null) return false;
   const event = value as Partial<DayEvent>;
   return (
+    (event.kind == null || event.kind === 'routine' || event.kind === 'activity' || event.kind === 'run') &&
     (event.routineId == null || typeof event.routineId === 'string') &&
     (event.activity == null || typeof event.activity === 'string') &&
+    (event.kmGoal == null || (typeof event.kmGoal === 'number' && event.kmGoal > 0)) &&
     isTimeOfDay(event.startTime)
   );
+}
+
+/**
+ * Brings a persisted event up to the current shape: older events have no `kind`,
+ * which is inferred from `routineId`/`activity`, and no `kmGoal`.
+ */
+function normalizeDayEvent(event: DayEvent): DayEvent {
+  const kind =
+    event.kind === 'run' ? 'run' : event.routineId != null ? 'routine' : 'activity';
+  return {
+    ...event,
+    kind,
+    kmGoal: typeof event.kmGoal === 'number' && event.kmGoal > 0 ? event.kmGoal : null,
+    endTime: isTimeOfDay(event.endTime) ? event.endTime : nextHour(event.startTime),
+  };
 }
 
 function isDayPlan(value: unknown): value is DayPlan {
@@ -184,10 +202,7 @@ function parseSchedule(value: unknown): WeekSchedule | null {
   if (!Array.isArray(value) || value.length !== 7) return null;
   if (value.every(isDayPlan)) {
     return value.map((day) => ({
-      events: day.events.map((event) => ({
-        ...event,
-        endTime: isTimeOfDay(event.endTime) ? event.endTime : nextHour(event.startTime),
-      })),
+      events: day.events.map(normalizeDayEvent),
       isRest: day.isRest,
       notes: day.notes,
     }));
@@ -323,6 +338,14 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
             exercise.id === id ? { ...exercise, ...patch } : exercise,
           ),
         })),
+      moveExercise: (fromIndex, toIndex) =>
+        setRoutine((current) => {
+          if (fromIndex === toIndex) return current;
+          const exercises = current.exercises.slice();
+          const [moved] = exercises.splice(fromIndex, 1);
+          exercises.splice(toIndex, 0, moved);
+          return { ...current, exercises };
+        }),
       clearRoutine: () =>
         setRoutine({ name: DEFAULT_ROUTINE.name, exercises: [] }),
       updateDay: (index, patch) =>
@@ -341,6 +364,8 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
                       routineId: event.routineId,
                       activity: event.activity,
                       endTime: event.endTime,
+                      kind: event.kind,
+                      kmGoal: event.kmGoal,
                     }),
                   ],
                 }

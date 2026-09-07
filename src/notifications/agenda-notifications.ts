@@ -1,4 +1,4 @@
-import type { SavedRoutine, WeekSchedule } from '@/types/workout';
+import type { DayEventKind, SavedRoutine, WeekSchedule } from '@/types/workout';
 import { formatTime12 } from '@/utils/format';
 
 export type AgendaNotification = {
@@ -9,7 +9,13 @@ export type AgendaNotification = {
   minute: number;
   title: string;
   body: string;
-  data: { kind: 'agenda'; dayIndex: number; routineId: string | null };
+  data: {
+    kind: 'agenda';
+    dayIndex: number;
+    routineId: string | null;
+    /** Present on run events so the tap can route to the runner screen. */
+    eventKind?: DayEventKind;
+  };
 };
 
 /**
@@ -60,6 +66,22 @@ export function buildAgendaNotifications(
     day.events.forEach((event) => {
       const slot = reminderSlot(dayIndex, event.startTime.hour, event.startTime.minute);
       const time = formatTime12(event.startTime.hour, event.startTime.minute);
+
+      if (event.kind === 'run') {
+        result.push({
+          id: `agenda-${dayIndex}-${event.id}`,
+          weekday: slot.weekday,
+          hour: slot.hour,
+          minute: slot.minute,
+          title: '¡Hora de correr!',
+          body:
+            event.kmGoal != null
+              ? `Tienes una carrera de ${event.kmGoal} km a las ${time}.`
+              : `Tienes una carrera a las ${time}.`,
+          data: { kind: 'agenda', dayIndex, routineId: null, eventKind: 'run' },
+        });
+        return;
+      }
 
       if (event.routineId) {
         const routine = routines.find((item) => item.id === event.routineId);

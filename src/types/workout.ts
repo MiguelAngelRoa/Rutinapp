@@ -23,15 +23,24 @@ export type TimeOfDay = {
   minute: number;
 };
 
+export type DayEventKind = 'routine' | 'activity' | 'run';
+
 export type DayEvent = {
   id: string;
   startTime: TimeOfDay;
   /** Exclusive end of the event (the last occupied hour row is `endTime.hour - 1`). */
   endTime: TimeOfDay;
+  /** What the event represents. `run` events schedule a running session with an optional distance goal. */
+  kind: DayEventKind;
   routineId: string | null;
   /** Custom activity label that doesn't reference a saved routine, e.g. "Jiu Jitsu". */
   activity: string;
+  /** Distance goal in kilometers for `run` events. */
+  kmGoal: number | null;
 };
+
+/** Non-time fields of an event, used to create or update a scheduled slot. */
+export type DayEventContent = Omit<DayEvent, 'id' | 'startTime' | 'endTime'>;
 
 export type DayPlan = {
   /** Scheduled events for the day (one per hour). */
@@ -101,12 +110,21 @@ export function createDayEvent(
   startTime: TimeOfDay,
   partial: Partial<Omit<DayEvent, 'id' | 'startTime'>> = {},
 ): DayEvent {
+  const kmGoal =
+    typeof partial.kmGoal === 'number' && partial.kmGoal > 0 ? partial.kmGoal : null;
   return {
     id: createId(),
     startTime: { ...startTime },
     endTime: partial.endTime ? { ...partial.endTime } : nextHour(startTime),
+    kind:
+      partial.kind === 'run'
+        ? 'run'
+        : partial.routineId != null
+          ? 'routine'
+          : 'activity',
     routineId: partial.routineId ?? null,
     activity: partial.activity ?? '',
+    kmGoal,
   };
 }
 

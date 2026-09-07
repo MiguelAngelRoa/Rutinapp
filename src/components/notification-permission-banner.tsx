@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { MaxContentWidth, Radius, Shadow, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-type PermissionState = 'checking' | 'granted' | 'denied';
+type PermissionState = 'checking' | 'granted' | 'denied' | 'undetermined';
 
 const DISMISSAL_KEY = 'rutinapp:notification-banner-dismissed:v1';
 
@@ -47,15 +47,21 @@ export function NotificationPermissionBanner() {
 
   const check = useCallback(async () => {
     try {
-      let current = await Notifications.getPermissionsAsync();
-      if (current.status === 'undetermined') {
-        current = await Notifications.requestPermissionsAsync({
-          ios: { allowAlert: true, allowBadge: true, allowSound: true },
-        });
-      }
-      setPermission(current.granted ? 'granted' : 'denied');
+      const current = await Notifications.getPermissionsAsync();
+      setPermission(current.granted ? 'granted' : current.status);
     } catch {
       setPermission('granted');
+    }
+  }, []);
+
+  const request = useCallback(async () => {
+    try {
+      const result = await Notifications.requestPermissionsAsync({
+        ios: { allowAlert: true, allowBadge: true, allowSound: true },
+      });
+      setPermission(result.granted ? 'granted' : 'denied');
+    } catch {
+      setPermission('denied');
     }
   }, []);
 
@@ -73,7 +79,10 @@ export function NotificationPermissionBanner() {
     return () => subscription.remove();
   }, [check]);
 
-  const visible = !dismissed && permission === 'denied' && pathname !== '/explore';
+  const visible =
+    !dismissed &&
+    (permission === 'denied' || permission === 'undetermined') &&
+    pathname !== '/routine';
 
   useEffect(() => {
     progress.value = withTiming(visible ? 1 : 0, { duration: 250 });
@@ -122,9 +131,17 @@ export function NotificationPermissionBanner() {
           notificaciones de rutinapp.
         </ThemedText>
         <Button
-          label="Activar en Ajustes"
+          label={
+            permission === 'undetermined'
+              ? 'Activar notificaciones'
+              : 'Activar en Ajustes'
+          }
           size="md"
-          onPress={() => Linking.openSettings()}
+          onPress={
+            permission === 'undetermined'
+              ? request
+              : () => Linking.openSettings()
+          }
           style={styles.action}
         />
       </View>

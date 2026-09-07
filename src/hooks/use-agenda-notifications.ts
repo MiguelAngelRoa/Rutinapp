@@ -191,8 +191,13 @@ export function useAgendaNotifications() {
     let active = true;
     const redirect = (response: Notifications.NotificationResponse) => {
       if (response.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) return;
-      if (response.notification.request.content.data?.kind !== 'agenda') return;
-      router.navigate('/');
+      const data = response.notification.request.content.data;
+      if (data?.kind !== 'agenda') return;
+      if (data?.eventKind === 'run') {
+        router.navigate('/runner');
+        return;
+      }
+      router.navigate('/routine');
     };
 
     Notifications.getLastNotificationResponseAsync()

@@ -1,4 +1,5 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { router } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -12,6 +13,7 @@ import {
   Spacing,
   TopInset,
 } from "@/constants/theme";
+import { useMode } from "@/context/mode-context";
 import { useWorkout } from "@/context/workout-context";
 import { useTheme } from "@/hooks/use-theme";
 import { mondayFirstIndex, WEEKDAY_NAMES } from "@/types/workout";
@@ -21,12 +23,22 @@ export default function ScheduleScreen() {
   const theme = useTheme();
   const safeAreaInsets = useSafeAreaInsets();
   const { schedule, routines } = useWorkout();
+  const { setMode } = useMode();
   const [editingDay, setEditingDay] = useState<number | null>(null);
   const [pressedDay, setPressedDay] = useState<number | null>(null);
 
   const todayIndex = mondayFirstIndex(new Date().getDay());
   const trainingCount = schedule.filter((day) => !day.isRest && day.events.length > 0).length;
   const restCount = schedule.filter((day) => day.isRest).length;
+
+  const startRun = (kmGoal: number | null) => {
+    setMode("runner");
+    router.navigate(
+      kmGoal != null
+        ? { pathname: "/runner", params: { goal: String(kmGoal) } }
+        : "/runner",
+    );
+  };
 
   const insets = {
     top: safeAreaInsets.top + TopInset,
@@ -107,9 +119,15 @@ export default function ScheduleScreen() {
                   ) : day.events.length > 0 ? (
                     <View style={styles.dayInfo}>
                       {day.events.slice(0, 3).map((event) => {
-                        const label = event.routineId
-                          ? routines.find((item) => item.id === event.routineId)?.name
-                          : event.activity;
+                        const isRun = event.kind === "run";
+                        const label = isRun
+                          ? "Correr"
+                          : event.routineId
+                            ? (routines.find((item) => item.id === event.routineId)?.name ??
+                              "Sin nombre")
+                            : event.activity;
+                        const kmLabel =
+                          isRun && event.kmGoal != null ? ` · ${event.kmGoal} km` : "";
                         return (
                           <View key={event.id} style={styles.eventRow}>
                             <ThemedText
@@ -119,9 +137,39 @@ export default function ScheduleScreen() {
                             >
                               {formatTime12(event.startTime.hour, event.startTime.minute)}
                             </ThemedText>
-                            <ThemedText type="smallBold" numberOfLines={1}>
+                            <ThemedText
+                              type="smallBold"
+                              numberOfLines={1}
+                              style={styles.eventLabel}
+                            >
                               {label}
+                              {kmLabel}
                             </ThemedText>
+                            {isRun && (
+                              <Pressable
+                                accessibilityRole="button"
+                                onPress={(e) => {
+                                  e.stopPropagation();
+                                  startRun(event.kmGoal);
+                                }}
+                                style={({ pressed }) => [
+                                  styles.startRun,
+                                  pressed && styles.pressed,
+                                ]}
+                              >
+                                <MaterialCommunityIcons
+                                  name="play"
+                                  size={12}
+                                  color={theme.accent}
+                                />
+                                <ThemedText
+                                  type="smallBold"
+                                  style={{ color: theme.accent }}
+                                >
+                                  Empezar
+                                </ThemedText>
+                              </Pressable>
+                            )}
                           </View>
                         );
                       })}
@@ -218,6 +266,22 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.two,
+  },
+  eventLabel: {
+    flex: 1,
+  },
+  startRun: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.half,
+    paddingVertical: Spacing.half,
+    paddingHorizontal: Spacing.two,
+    borderWidth: 1,
+    borderColor: "#4A4A52",
+    borderRadius: Radius.full,
+  },
+  pressed: {
+    opacity: 0.6,
   },
   eventTime: {
     fontVariant: ["tabular-nums"],
