@@ -39,6 +39,7 @@ export function RestTimer({
 
   const finished = phase === 'finished';
   const accent = theme.onAccent;
+  const fill = finished ? theme.success : theme.accent;
 
   const progress = Math.max(0, Math.min(1, remainingSeconds / durationSeconds));
 
@@ -52,12 +53,12 @@ export function RestTimer({
         style={({ pressed }) => [
           styles.adjustButton,
           styles.adjustLeft,
-          { backgroundColor: theme.backgroundElement },
+          { backgroundColor: theme.background },
           pressed && styles.adjustPressed,
         ]}
       >
-        <MaterialCommunityIcons name="minus" size={18} color={theme.accent} />
-        <ThemedText type="smallBold" style={[styles.adjustLabel, { color: theme.accent }]}>
+        <MaterialCommunityIcons name="minus" size={18} color={fill} />
+        <ThemedText type="smallBold" style={[styles.adjustLabel, { color: fill }]}>
           30
         </ThemedText>
       </Pressable>
@@ -70,12 +71,12 @@ export function RestTimer({
         style={({ pressed }) => [
           styles.adjustButton,
           styles.adjustRight,
-          { backgroundColor: theme.backgroundElement },
+          { backgroundColor: theme.background },
           pressed && styles.adjustPressed,
         ]}
       >
-        <MaterialCommunityIcons name="plus" size={18} color={theme.accent} />
-        <ThemedText type="smallBold" style={[styles.adjustLabel, { color: theme.accent }]}>
+        <MaterialCommunityIcons name="plus" size={18} color={fill} />
+        <ThemedText type="smallBold" style={[styles.adjustLabel, { color: fill }]}>
           30
         </ThemedText>
       </Pressable>
@@ -112,24 +113,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: Spacing.three,
+    paddingTop: Spacing.five + Spacing.three,
+    paddingBottom: Spacing.two,
   },
   adjustButton: {
     position: 'absolute',
-    top: Spacing.two,
+    top: Spacing.one,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.one,
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one,
+    paddingHorizontal: Spacing.two,
     borderRadius: Radius.md,
-    minWidth: 64,
+    minWidth: 56,
   },
   adjustLeft: {
-    left: Spacing.two,
+    left: Spacing.one,
   },
   adjustRight: {
-    right: Spacing.two,
+    right: Spacing.one,
   },
   adjustPressed: {
     opacity: 0.7,

@@ -325,31 +325,119 @@ export default function RunnerScreen() {
 
           <View
             pointerEvents="box-none"
-            style={[styles.topOverlay, { paddingTop: topInset }]}
+            style={styles.mapPanelContainer}
+            onLayout={handleMapContainerLayout}
           >
-            <View style={[styles.modeRow, { maxWidth: MaxContentWidth }]}>
-              <View style={styles.modePills}>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => setView('run')}
-                  style={[styles.modePill, { backgroundColor: theme.accent }]}
-                >
-                  <ThemedText type="smallBold" themeColor="onAccent">
-                    Correr
-                  </ThemedText>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => setView('history')}
-                  style={styles.modePill}
-                >
-                  <ThemedText type="smallBold" themeColor="textSecondary">
-                    Historial
-                  </ThemedText>
-                </Pressable>
+            <Animated.View
+              {...panelPanResponder.panHandlers}
+              onLayout={handlePanelLayout}
+              pointerEvents={panelVisible ? 'auto' : 'none'}
+              style={[
+                styles.mapControlPanel,
+                { opacity: panelVisible ? 1 : 0 },
+                {
+                  transform: [
+                    { translateX: translate.x },
+                    { translateY: translate.y },
+                  ],
+                },
+              ]}
+            >
+              <View style={styles.panelDragHandle}>
+                <MaterialCommunityIcons
+                  name="drag"
+                  size={20}
+                  color={theme.textSecondary}
+                  accessibilityLabel="Arrastrar panel"
+                />
               </View>
-            </View>
+              <PanelIconButton
+                label={showPlaces ? 'Ocultar lugares' : 'Mostrar lugares'}
+                color={showPlaces ? theme.accent : theme.textSecondary}
+                icon={showPlaces ? 'map-marker-radius-outline' : 'map-marker-off-outline'}
+                onPress={() => setShowPlaces((current) => !current)}
+              />
+              <View style={styles.panelDivider} />
+              <PanelIconButton
+                label={
+                  status === 'idle'
+                    ? 'Iniciar'
+                    : status === 'running'
+                      ? 'Pausar'
+                      : 'Reanudar'
+                }
+                color={
+                  status === 'running' ? theme.success : theme.accent
+                }
+                icon={status === 'running' ? 'pause' : 'play'}
+                onPress={() => {
+                  if (status === 'running') pause();
+                  else if (status === 'idle') start();
+                  else resume();
+                }}
+              />
+              <View style={styles.panelDivider} />
+              <PanelIconButton
+                label="Detener"
+                active={status !== 'idle'}
+                color={status !== 'idle' ? '#F04438' : theme.textSecondary}
+                icon="stop"
+                onPress={handleFinish}
+              />
+            </Animated.View>
+          </View>
+        </>
+      ) : (
+        <HistoryView
+          runs={runs}
+          topInset={topInset}
+          bottomInset={bottomInset}
+          onDelete={handleDeleteRun}
+          onStartRun={() => setView('run')}
+        />
+      )}
 
+      <View
+        pointerEvents="box-none"
+        style={[styles.topOverlay, { paddingTop: topInset + Spacing.five }]}
+      >
+        <View style={[styles.modeRow, { maxWidth: MaxContentWidth }]}>
+          <View style={styles.modePills}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setView('run')}
+              style={[
+                styles.modePill,
+                view === 'run' && { backgroundColor: theme.accent },
+              ]}
+            >
+              <ThemedText
+                type="smallBold"
+                themeColor={view === 'run' ? 'onAccent' : 'textSecondary'}
+              >
+                Correr
+              </ThemedText>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setView('history')}
+              style={[
+                styles.modePill,
+                view === 'history' && { backgroundColor: theme.accent },
+              ]}
+            >
+              <ThemedText
+                type="smallBold"
+                themeColor={view === 'history' ? 'onAccent' : 'textSecondary'}
+              >
+                Historial
+              </ThemedText>
+            </Pressable>
+          </View>
+        </View>
+
+        {view === 'run' && (
+          <>
             {hasGoal && (
               <View
                 style={[
@@ -427,81 +515,9 @@ export default function RunnerScreen() {
                 </View>
               </ThemedView>
             )}
-          </View>
-
-          <View
-            pointerEvents="box-none"
-            style={styles.mapPanelContainer}
-            onLayout={handleMapContainerLayout}
-          >
-            <Animated.View
-              {...panelPanResponder.panHandlers}
-              onLayout={handlePanelLayout}
-              pointerEvents={panelVisible ? 'auto' : 'none'}
-              style={[
-                styles.mapControlPanel,
-                { opacity: panelVisible ? 1 : 0 },
-                {
-                  transform: [
-                    { translateX: translate.x },
-                    { translateY: translate.y },
-                  ],
-                },
-              ]}
-            >
-              <View style={styles.panelDragHandle}>
-                <MaterialCommunityIcons
-                  name="drag"
-                  size={20}
-                  color={theme.textSecondary}
-                  accessibilityLabel="Arrastrar panel"
-                />
-              </View>
-              <PanelIconButton
-                label={showPlaces ? 'Ocultar lugares' : 'Mostrar lugares'}
-                color={showPlaces ? theme.accent : theme.textSecondary}
-                icon={showPlaces ? 'map-marker-radius-outline' : 'map-marker-off-outline'}
-                onPress={() => setShowPlaces((current) => !current)}
-              />
-              <View style={styles.panelDivider} />
-              <PanelIconButton
-                label={
-                  status === 'idle'
-                    ? 'Iniciar'
-                    : status === 'running'
-                      ? 'Pausar'
-                      : 'Reanudar'
-                }
-                color={
-                  status === 'running' ? theme.success : theme.accent
-                }
-                icon={status === 'running' ? 'pause' : 'play'}
-                onPress={() => {
-                  if (status === 'running') pause();
-                  else if (status === 'idle') start();
-                  else resume();
-                }}
-              />
-              <View style={styles.panelDivider} />
-              <PanelIconButton
-                label="Detener"
-                active={status !== 'idle'}
-                color={status !== 'idle' ? '#F04438' : theme.textSecondary}
-                icon="stop"
-                onPress={handleFinish}
-              />
-            </Animated.View>
-          </View>
-        </>
-      ) : (
-        <HistoryView
-          runs={runs}
-          topInset={topInset}
-          bottomInset={bottomInset}
-          onDelete={handleDeleteRun}
-          onStartRun={() => setView('run')}
-        />
-      )}
+          </>
+        )}
+      </View>
 
       <Modal
         visible={summary != null}
@@ -688,7 +704,7 @@ function RunRouteThumb({ route }: { route: RunRoutePoint[] }) {
             left: `${end.x}%`,
             top: `${end.y}%`,
             backgroundColor: theme.accent,
-            borderColor: theme.background,
+            borderColor: '#000000',
           },
         ]}
       />
@@ -713,10 +729,10 @@ function HistoryView({
 
   return (
     <ScrollView
-      style={[styles.historyScroll, { backgroundColor: theme.background }]}
+      style={[styles.historyScroll, { backgroundColor: '#000000' }]}
       contentContainerStyle={[
         styles.historyContent,
-        { paddingTop: topInset + Spacing.four, paddingBottom: bottomInset + Spacing.four },
+        { paddingTop: topInset + Spacing.six + Spacing.four, paddingBottom: bottomInset + Spacing.four },
       ]}
     >
       <View style={[styles.historyInner, { maxWidth: MaxContentWidth }]}>

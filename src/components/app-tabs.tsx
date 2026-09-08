@@ -30,7 +30,7 @@ export default function AppTabs() {
           tabBarActiveTintColor: colors.accent,
           tabBarInactiveTintColor: colors.textSecondary,
           tabBarStyle: {
-            backgroundColor: colors.background,
+            backgroundColor: colors.backgroundDarker,
             borderTopColor: colors.border,
           },
         }}

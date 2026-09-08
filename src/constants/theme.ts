@@ -9,12 +9,14 @@ import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    /** App background: black */
-    background: '#000000',
-    /** Cards and surfaces: dark charcoal */
-    backgroundElement: '#16161C',
+    /** App background: dark blue-gray */
+    background: '#1B1E26',
+    /** Bottom chrome (tab bar): darker than the page background */
+    backgroundDarker: '#13151B',
+    /** Cards and surfaces: slightly lighter than the page background */
+    backgroundElement: '#232733',
     /** Pressed / selected surfaces */
-    backgroundSelected: '#232329',
+    backgroundSelected: '#2E3340',
     /** Primary text: white */
     text: '#FFFFFF',
     /** Secondary text: light gray */
@@ -33,9 +35,10 @@ export const Colors = {
     successSoft: '#12331E',
   },
   dark: {
-    background: '#000000',
-    backgroundElement: '#16161C',
-    backgroundSelected: '#232329',
+    background: '#1B1E26',
+    backgroundDarker: '#13151B',
+    backgroundElement: '#232733',
+    backgroundSelected: '#2E3340',
     text: '#FFFFFF',
     textSecondary: '#9CA3AF',
     accent: '#A3E635',

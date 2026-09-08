@@ -4,12 +4,13 @@ import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-export type ButtonVariant = 'primary' | 'success' | 'ghost' | 'danger' | 'outline';
+export type ButtonVariant = 'primary' | 'success' | 'ghost' | 'danger' | 'outline' | 'dark';
 
 export type ButtonProps = PressableProps & {
   label: string;
   variant?: ButtonVariant;
   size?: 'md' | 'lg';
+  labelColor?: string;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -17,6 +18,7 @@ export function Button({
   label,
   variant = 'primary',
   size = 'lg',
+  labelColor,
   disabled,
   style,
   ...rest
@@ -25,9 +27,26 @@ export function Button({
 
   const isFilled = variant === 'primary' || variant === 'success';
   const isOutline = variant === 'outline';
-  const backgroundColor = variant === 'primary' ? theme.accent : variant === 'success' ? theme.success : isOutline ? theme.background : 'transparent';
+  const isDark = variant === 'dark';
+  const backgroundColor =
+    variant === 'primary'
+      ? theme.accent
+      : variant === 'success'
+        ? theme.success
+        : isOutline
+          ? theme.background
+          : isDark
+            ? theme.background
+            : 'transparent';
   const color =
-    isFilled ? theme.onAccent : variant === 'danger' ? '#F04438' : isOutline ? theme.accent : theme.textSecondary;
+    labelColor ??
+    (isFilled
+      ? theme.onAccent
+      : variant === 'danger'
+        ? '#F04438'
+        : isOutline || isDark
+          ? theme.accent
+          : theme.textSecondary);
 
   return (
     <Pressable

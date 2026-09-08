@@ -8,7 +8,6 @@ import * as SplashScreen from "expo-splash-screen";
 import { AgendaNotifications } from "@/components/agenda-notifications";
 import { AnimatedSplashOverlay } from "@/components/animated-icon";
 import AppTabs from "@/components/app-tabs";
-import { NotificationPermissionBanner } from "@/components/notification-permission-banner";
 import { RoutineImportDialog } from "@/components/routine-import-dialog";
 import { RoutineImportLink } from "@/components/routine-import-link";
 import { ModeProvider } from "@/context/mode-context";
@@ -21,8 +20,8 @@ const AppTheme = {
   colors: {
     ...DarkTheme.colors,
     primary: "#A3E635",
-    background: "#000000",
-    card: "#000000",
+    background: "#23262E",
+    card: "#23262E",
     text: "#FFFFFF",
     border: "#4A4A52",
     notification: "#A3E635",
@@ -38,7 +37,6 @@ export default function TabLayout() {
             <AgendaNotifications />
             <AnimatedSplashOverlay />
             <AppTabs />
-            <NotificationPermissionBanner />
             <RoutineImportLink />
             <RoutineImportDialog />
           </ModeProvider>

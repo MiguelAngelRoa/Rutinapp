@@ -1,12 +1,13 @@
-import { useEffect, useRef } from 'react';
-import { StyleSheet } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { StyleSheet, type NativeSyntheticEvent } from 'react-native';
 import {
   Camera,
   GeoJSONSource,
   Layer,
   Map,
-  VectorSource,
   type CameraRef,
+  type MapRef,
+  type ViewStateChangeEvent,
 } from '@maplibre/maplibre-react-native';
 import type {
   ExpressionSpecification,
@@ -14,18 +15,15 @@ import type {
 } from '@maplibre/maplibre-gl-style-spec';
 
 import type { RunRoutePoint } from '@/services/run-storage';
+import {
+  emptyPoiCollection,
+  loadPoisForRegion,
+  type ViewportBounds,
+} from '@/services/poi-tiles';
 
 const MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
-const POI_SOURCE_URL = 'https://tiles.openfreemap.org/planet';
 const CAMERA_ZOOM = 15;
-
-const POINT_GEOMETRY: ExpressionSpecification = [
-  'match',
-  ['geometry-type'],
-  ['MultiPoint', 'Point'],
-  true,
-  false,
-];
+const POI_REFRESH_DEBOUNCE_MS = 600;
 
 const POI_NAME_FIELD: ExpressionSpecification = [
   'case',
@@ -33,6 +31,31 @@ const POI_NAME_FIELD: ExpressionSpecification = [
   ['concat', ['get', 'name:latin'], '\n', ['get', 'name:nonlatin']],
   ['coalesce', ['get', 'name_en'], ['get', 'name']],
 ];
+
+const TRANSIT_CLASS: ExpressionSpecification = [
+  'match',
+  ['get', 'class'],
+  ['airport', 'bus', 'rail'],
+  true,
+  false,
+];
+
+const NOT_TRANSIT: ExpressionSpecification = ['!', TRANSIT_CLASS];
+
+const POI_RANK_1: FilterSpecification = [
+  'all',
+  NOT_TRANSIT,
+  ['>=', ['get', 'rank'], 1],
+  ['<', ['get', 'rank'], 7],
+];
+const POI_RANK_7: FilterSpecification = [
+  'all',
+  NOT_TRANSIT,
+  ['>=', ['get', 'rank'], 7],
+  ['<', ['get', 'rank'], 20],
+];
+const POI_RANK_20: FilterSpecification = ['all', NOT_TRANSIT, ['>=', ['get', 'rank'], 20]];
+const POI_TRANSIT: FilterSpecification = TRANSIT_CLASS as FilterSpecification;
 
 const POI_COLOR: ExpressionSpecification = [
   'match',
@@ -70,41 +93,12 @@ const POI_COLOR: ExpressionSpecification = [
   '#FBC02D',
 ];
 
-const TRANSIT_CLASS: ExpressionSpecification = [
-  'match',
-  ['get', 'class'],
-  ['airport', 'bus', 'rail'],
-  true,
-  false,
-];
-
-const NOT_TRANSIT: ExpressionSpecification = ['!', TRANSIT_CLASS];
-
-const POI_RANK_1: FilterSpecification = [
-  'all',
-  POINT_GEOMETRY,
-  NOT_TRANSIT,
-  ['>=', ['get', 'rank'], 1],
-  ['<', ['get', 'rank'], 7],
-];
-const POI_RANK_7: FilterSpecification = [
-  'all',
-  POINT_GEOMETRY,
-  NOT_TRANSIT,
-  ['>=', ['get', 'rank'], 7],
-  ['<', ['get', 'rank'], 20],
-];
-const POI_RANK_20: FilterSpecification = [
-  'all',
-  POINT_GEOMETRY,
-  NOT_TRANSIT,
-  ['>=', ['get', 'rank'], 20],
-];
-const POI_TRANSIT: FilterSpecification = [
-  'all',
-  POINT_GEOMETRY,
-  TRANSIT_CLASS,
-];
+type RunnerMapProps = {
+  route: RunRoutePoint[];
+  currentLocation: { latitude: number; longitude: number } | null;
+  paused: boolean;
+  showPois: boolean;
+};
 
 type PoiTierProps = {
   id: string;
@@ -119,11 +113,18 @@ function PoiLayerTier({ id, minzoom, filter }: PoiTierProps) {
         id={`poi-${id}-dot`}
         type="circle"
         source="poi"
-        source-layer="poi"
         minzoom={minzoom}
         filter={filter}
         paint={{
-          'circle-radius': 11,
+          'circle-radius': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            12,
+            5,
+            17,
+            11,
+          ],
           'circle-color': POI_COLOR,
           'circle-opacity': 0.95,
           'circle-stroke-color': '#FFFFFF',
@@ -135,12 +136,21 @@ function PoiLayerTier({ id, minzoom, filter }: PoiTierProps) {
         id={`poi-${id}-icon`}
         type="symbol"
         source="poi"
-        source-layer="poi"
         minzoom={minzoom}
         filter={filter}
         layout={{
           'icon-image': 'circle_11_black',
-          'icon-size': 0.6,
+          'icon-size': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            14,
+            0,
+            14.1,
+            0.6,
+            17,
+            0.7,
+          ],
           'icon-anchor': 'center',
         }}
       />
@@ -148,13 +158,22 @@ function PoiLayerTier({ id, minzoom, filter }: PoiTierProps) {
         id={`poi-${id}-label`}
         type="symbol"
         source="poi"
-        source-layer="poi"
         minzoom={minzoom}
         filter={filter}
         layout={{
           'text-field': POI_NAME_FIELD,
           'text-font': ['Noto Sans Regular'],
-          'text-size': 12,
+          'text-size': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            14,
+            0,
+            14.1,
+            12,
+            17,
+            13,
+          ],
           'text-anchor': 'left',
           'text-offset': [1.1, 0],
           'text-max-width': 8,
@@ -170,11 +189,9 @@ function PoiLayerTier({ id, minzoom, filter }: PoiTierProps) {
   );
 }
 
-type RunnerMapProps = {
-  route: RunRoutePoint[];
-  currentLocation: { latitude: number; longitude: number } | null;
-  paused: boolean;
-  showPois: boolean;
+type Region = {
+  zoom: number;
+  bounds: ViewportBounds;
 };
 
 export default function RunnerMap({
@@ -185,6 +202,10 @@ export default function RunnerMap({
 }: RunnerMapProps) {
   const cameraRef = useRef<CameraRef>(null);
   const centeredRef = useRef(false);
+  const mapRef = useRef<MapRef>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const generationRef = useRef(0);
+  const [poiData, setPoiData] = useState(emptyPoiCollection);
 
   useEffect(() => {
     if (paused || !currentLocation) return;
@@ -199,6 +220,59 @@ export default function RunnerMap({
       centeredRef.current = true;
     }
   }, [currentLocation, paused]);
+
+  const fetchRegionPois = useCallback(
+    async (region: Region) => {
+      if (!showPois || !mapRef.current) return;
+      const generation = ++generationRef.current;
+      try {
+        const data = await loadPoisForRegion(region.bounds, region.zoom);
+        if (generation === generationRef.current && data !== null) {
+          setPoiData(data);
+        }
+      } catch {
+        // Network failures keep the last successfully loaded POIs on screen.
+      }
+    },
+    [showPois],
+  );
+
+  const schedulePoiRefresh = useCallback(
+    (region: Region) => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        void fetchRegionPois(region);
+      }, POI_REFRESH_DEBOUNCE_MS);
+    },
+    [fetchRegionPois],
+  );
+
+  const refreshFromMap = useCallback(() => {
+    mapRef.current?.getViewState().then(
+      (viewState) => schedulePoiRefresh(viewState),
+      () => {
+        // Best-effort: POIs appear once the viewport settles.
+      },
+    );
+  }, [schedulePoiRefresh]);
+
+  const handleRegionDidChange = (event: NativeSyntheticEvent<ViewStateChangeEvent>) => {
+    if (showPois) schedulePoiRefresh(event.nativeEvent);
+  };
+
+  useEffect(() => {
+    if (showPois) {
+      const timeout = setTimeout(refreshFromMap, 250);
+      return () => clearTimeout(timeout);
+    }
+    setPoiData(emptyPoiCollection());
+  }, [showPois, refreshFromMap]);
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
 
   const routeData: GeoJSON.FeatureCollection | null =
     route.length > 1
@@ -236,7 +310,15 @@ export default function RunnerMap({
     : null;
 
   return (
-    <Map style={styles.map} mapStyle={MAP_STYLE_URL} logo={false} attribution={false}>
+    <Map
+      ref={mapRef}
+      style={styles.map}
+      mapStyle={MAP_STYLE_URL}
+      logo={false}
+      attribution={false}
+      onRegionDidChange={handleRegionDidChange}
+      onDidFinishLoadingMap={refreshFromMap}
+    >
       <Camera
         ref={cameraRef}
         initialViewState={
@@ -250,12 +332,12 @@ export default function RunnerMap({
       />
 
       {showPois && (
-        <VectorSource id="poi" url={POI_SOURCE_URL}>
+        <GeoJSONSource id="poi" data={poiData}>
           <PoiLayerTier id="transit" minzoom={12} filter={POI_TRANSIT} />
           <PoiLayerTier id="r1" minzoom={15} filter={POI_RANK_1} />
           <PoiLayerTier id="r7" minzoom={16} filter={POI_RANK_7} />
           <PoiLayerTier id="r20" minzoom={17} filter={POI_RANK_20} />
-        </VectorSource>
+        </GeoJSONSource>
       )}
 
       {routeData && (

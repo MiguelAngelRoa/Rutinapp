@@ -28,7 +28,6 @@ import { ThemedView } from "@/components/themed-view";
 import { TodayPlanCard } from "@/components/today-plan-card";
 import { Button } from "@/components/ui/button";
 import {
-  BottomTabInset,
   MaxContentWidth,
   Radius,
   Spacing,
@@ -77,16 +76,11 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
     heroModeValue.value = withTiming(heroMode, { duration: 300 });
   }, [heroMode, heroModeValue]);
 
-  const heroAnimatedStyle = useAnimatedStyle(() => ({
+  const screenBg = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(
       heroModeValue.value,
       [0, 1, 2],
-      [theme.backgroundElement, theme.accent, theme.success],
-    ),
-    borderColor: interpolateColor(
-      heroModeValue.value,
-      [0, 1, 2],
-      [theme.border, theme.accent, theme.success],
+      [theme.background, theme.accent, theme.success],
     ),
   }));
 
@@ -97,6 +91,8 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
   const heroRestOpacity = useAnimatedStyle(() => ({
     opacity: interpolate(heroModeValue.value, [0, 1, 2], [0, 1, 1]),
   }));
+
+  const resting = restTimer.phase !== "idle";
 
   const exercise = sessionRoutine.exercises[exerciseIndex];
   const isLastExercise = exerciseIndex >= sessionRoutine.exercises.length - 1;
@@ -282,9 +278,6 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
     top: contentTopInset ?? safeAreaInsets.top + TopInset,
   };
 
-  const showControls =
-    !done && sessionRoutine.exercises.length > 0 && exercise != null;
-
   const todayPlanDismissed = dismissedPlanDate === localDateKey(new Date());
 
   const todayPlanCard = todayPlanDismissed ? null : (
@@ -296,9 +289,8 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
   );
 
   return (
-    <View style={styles.screen}>
-      <ScrollView
-        style={[styles.scrollView, { backgroundColor: theme.background }]}
+    <Animated.View style={[styles.screen, screenBg]}>
+      <ScrollView style={styles.scrollView}
         contentContainerStyle={[
           styles.contentContainer,
           {
@@ -323,7 +315,12 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
               <View style={styles.stack}>
                 <View style={styles.header}>
                   <View style={styles.headerTop}>
-                    <ThemedText type="caps" themeColor="textSecondary">
+                    <ThemedText
+                      type="caps"
+                      style={{
+                        color: resting ? theme.onAccent : theme.textSecondary,
+                      }}
+                    >
                       Sesión de entrenamiento
                     </ThemedText>
                     <Pressable
@@ -342,20 +339,31 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
                       </ThemedText>
                     </Pressable>
                   </View>
-                  <ThemedText type="heading">{sessionRoutine.name}</ThemedText>
+                  <ThemedText
+                    type="heading"
+                    style={{ color: resting ? theme.onAccent : theme.text }}
+                  >
+                    {sessionRoutine.name}
+                  </ThemedText>
 
                   <View style={styles.progressRow}>
                     <View
                       style={[
                         styles.progressTrack,
-                        { backgroundColor: theme.backgroundSelected },
+                        {
+                          backgroundColor: resting
+                            ? "rgba(0, 0, 0, 0.35)"
+                            : theme.backgroundSelected,
+                        },
                       ]}
                     >
                       <View
                         style={[
                           styles.progressFill,
                           {
-                            backgroundColor: theme.accent,
+                            backgroundColor: resting
+                              ? theme.onAccent
+                              : theme.accent,
                             width: `${sessionProgress * 100}%`,
                           },
                         ]}
@@ -363,8 +371,10 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
                     </View>
                     <ThemedText
                       type="small"
-                      themeColor="textSecondary"
-                      style={styles.progressLabel}
+                      style={[
+                        styles.progressLabel,
+                        { color: resting ? theme.onAccent : theme.textSecondary },
+                      ]}
                     >
                       {completedSetsTotal}/{totalSets} series
                     </ThemedText>
@@ -373,125 +383,123 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
 
                 {todayPlanCard}
 
-                <Animated.View style={[styles.hero, heroAnimatedStyle]}>
-                  <Animated.View style={[styles.heroInfo, heroInfoOpacity]}>
-                    <View
-                      style={[
-                        styles.heroChip,
-                        { backgroundColor: theme.accentSoft },
-                      ]}
-                    >
-                      <ThemedText
-                        type="caps"
-                        style={[styles.heroChipText, { color: theme.accent }]}
+                <Animated.View style={styles.hero}>
+                  <View style={styles.heroBody}>
+                    <Animated.View style={[styles.heroInfo, heroInfoOpacity]}>
+                      <View
+                        style={[
+                          styles.heroChip,
+                          { backgroundColor: theme.accentSoft },
+                        ]}
                       >
-                        {allSetsDone
-                          ? "Series completadas"
-                          : `Serie ${completedSets + 1} de ${exercise.sets}`}
+                        <ThemedText
+                          type="caps"
+                          style={[styles.heroChipText, { color: theme.accent }]}
+                        >
+                          {allSetsDone
+                            ? "Series completadas"
+                            : `Serie ${completedSets + 1} de ${exercise.sets}`}
+                        </ThemedText>
+                      </View>
+                      <ThemedText style={styles.heroTitle}>
+                        {exercise.name || "Sin nombre"}
                       </ThemedText>
-                    </View>
-                    <ThemedText style={styles.heroTitle}>
-                      {exercise.name || "Sin nombre"}
-                    </ThemedText>
-                    <ThemedText
-                      themeColor="textSecondary"
-                      style={styles.heroMeta}
-                    >
-                      {exercise.reps} reps por serie
-                    </ThemedText>
-                    <View style={styles.setRow}>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={
-                          completedSets > 0
-                            ? "Volver a la serie anterior"
-                            : "Volver al ejercicio anterior"
-                        }
-                        disabled={!canGoBack}
-                        onPress={() => setUndoModalVisible(true)}
-                        hitSlop={8}
-                        style={({ pressed }) => [
-                          styles.setArrow,
-                          { borderColor: theme.border },
-                          !canGoBack && styles.setArrowDisabled,
-                          pressed && styles.pressed,
-                        ]}
+                      <ThemedText
+                        themeColor="textSecondary"
+                        style={styles.heroMeta}
                       >
-                        <MaterialCommunityIcons
-                          name="chevron-left"
-                          size={24}
-                          color={theme.accent}
-                        />
-                      </Pressable>
-                      <SetDots total={exercise.sets} completed={completedSets} />
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={
-                          allSetsDone
-                            ? "Ir al siguiente ejercicio"
-                            : "Completar siguiente serie"
-                        }
-                        onPress={handleForward}
-                        hitSlop={8}
-                        style={({ pressed }) => [
-                          styles.setArrow,
-                          { borderColor: theme.border },
-                          pressed && styles.pressed,
-                        ]}
-                      >
-                        <MaterialCommunityIcons
-                          name="chevron-right"
-                          size={24}
-                          color={theme.accent}
-                        />
-                      </Pressable>
-                    </View>
-                    <RestTimer
-                      phase="idle"
-                      remainingSeconds={restTimer.remainingSeconds}
-                      durationSeconds={exercise.restSeconds}
-                      onAdjustSeconds={restTimer.adjust}
-                    />
-                  </Animated.View>
+                        {exercise.reps} reps por serie
+                      </ThemedText>
+                      <View style={styles.setRow}>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={
+                            completedSets > 0
+                              ? "Volver a la serie anterior"
+                              : "Volver al ejercicio anterior"
+                          }
+                          disabled={!canGoBack}
+                          onPress={() => setUndoModalVisible(true)}
+                          hitSlop={8}
+                          style={({ pressed }) => [
+                            styles.setArrow,
+                            { borderColor: theme.border },
+                            !canGoBack && styles.setArrowDisabled,
+                            pressed && styles.pressed,
+                          ]}
+                        >
+                          <MaterialCommunityIcons
+                            name="chevron-left"
+                            size={24}
+                            color={theme.accent}
+                          />
+                        </Pressable>
+                        <SetDots total={exercise.sets} completed={completedSets} />
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={
+                            allSetsDone
+                              ? "Ir al siguiente ejercicio"
+                              : "Completar siguiente serie"
+                          }
+                          onPress={handleForward}
+                          hitSlop={8}
+                          style={({ pressed }) => [
+                            styles.setArrow,
+                            { borderColor: theme.border },
+                            pressed && styles.pressed,
+                          ]}
+                        >
+                          <MaterialCommunityIcons
+                            name="chevron-right"
+                            size={24}
+                            color={theme.accent}
+                          />
+                        </Pressable>
+                      </View>
+                      <RestTimer
+                        phase="idle"
+                        remainingSeconds={restTimer.remainingSeconds}
+                        durationSeconds={exercise.restSeconds}
+                        onAdjustSeconds={restTimer.adjust}
+                      />
+                    </Animated.View>
 
-                  <Animated.View
-                    pointerEvents={restTimer.phase === "idle" ? "none" : "auto"}
-                    style={[styles.heroOverlay, heroRestOpacity]}
-                  >
-                    <RestTimer
-                      phase={restTimer.phase}
-                      remainingSeconds={restTimer.remainingSeconds}
-                      durationSeconds={exercise.restSeconds}
-                      onAdjustSeconds={restTimer.adjust}
+                    <Animated.View
+                      pointerEvents={restTimer.phase === "idle" ? "none" : "auto"}
+                      style={[styles.heroOverlay, heroRestOpacity]}
+                    >
+                      <RestTimer
+                        phase={restTimer.phase}
+                        remainingSeconds={restTimer.remainingSeconds}
+                        durationSeconds={exercise.restSeconds}
+                        onAdjustSeconds={restTimer.adjust}
+                      />
+                    </Animated.View>
+                  </View>
+
+                  <View style={styles.heroAction}>
+                    <Button
+                      label={getPrimaryLabel()}
+                      variant={
+                        restTimer.phase === "idle" ? "primary" : "dark"
+                      }
+                      labelColor={
+                        restTimer.phase === "idle"
+                          ? undefined
+                          : restTimer.phase === "finished"
+                            ? theme.success
+                            : theme.accent
+                      }
+                      onPress={handlePrimary}
                     />
-                  </Animated.View>
+                  </View>
                 </Animated.View>
               </View>
             )
           )}
         </View>
       </ScrollView>
-
-      {showControls && (
-        <View
-          style={[
-            styles.bottomBar,
-            {
-              backgroundColor: theme.background,
-              paddingBottom:
-                safeAreaInsets.bottom + BottomTabInset + Spacing.four,
-            },
-          ]}
-        >
-          <View style={styles.bottomBarContent}>
-            <Button
-              label={getPrimaryLabel()}
-              variant={restTimer.phase === "finished" ? "success" : "primary"}
-              onPress={handlePrimary}
-            />
-          </View>
-        </View>
-      )}
 
       <Modal
         visible={restartModalVisible}
@@ -626,7 +634,7 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
           </ThemedView>
         </View>
       </Modal>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -734,16 +742,6 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
-  bottomBar: {
-    paddingTop: Spacing.three,
-    paddingHorizontal: Spacing.five,
-    alignItems: "center",
-  },
-  bottomBarContent: {
-    width: "100%",
-    maxWidth: MaxContentWidth,
-    gap: Spacing.three,
-  },
   contentContainer: {
     flexDirection: "row",
     justifyContent: "center",
@@ -771,6 +769,9 @@ const styles = StyleSheet.create({
   headerRestartButton: {
     paddingVertical: Spacing.one,
     paddingHorizontal: Spacing.two,
+    borderWidth: 1,
+    borderColor: "#F04438",
+    borderRadius: Radius.md,
   },
   headerRestartText: {
     color: "#F04438",
@@ -799,8 +800,13 @@ const styles = StyleSheet.create({
   hero: {
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.five,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
+    gap: Spacing.three,
+  },
+  heroBody: {
+    flex: 1,
+  },
+  heroAction: {
+    alignSelf: "stretch",
   },
   heroInfo: {
     alignItems: "center",
