@@ -21,6 +21,7 @@ const MIN_DISTANCE_M = 2;
 
 export function useRunner() {
   const [status, setStatus] = useState<RunnerStatus>('idle');
+  const statusRef = useRef<RunnerStatus>('idle');
   const [elapsedMs, setElapsedMs] = useState(0);
   const [distanceM, setDistanceM] = useState(0);
   const [route, setRoute] = useState<RunRoutePoint[]>([]);
@@ -32,6 +33,10 @@ export function useRunner() {
   const startedAtRef = useRef(0);
   const accumulatedMsRef = useRef(0);
   const lastPointRef = useRef<RunRoutePoint | null>(null);
+
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
 
   /** Fetches the current GPS position without starting a run, so the marker and
    *  the map are visible as soon as the runner view opens. */
@@ -52,7 +57,9 @@ export function useRunner() {
   /** Elapsed time accounting for the running clock plus any paused time. */
   const totalElapsedMs = () =>
     accumulatedMsRef.current +
-    (status === 'running' ? Date.now() - startedAtRef.current : 0);
+    (statusRef.current === 'running'
+      ? Date.now() - startedAtRef.current
+      : 0);
 
   useEffect(() => {
     return () => {
@@ -153,16 +160,21 @@ export function useRunner() {
 
   const finish = (): RunSnapshot => {
     const finalElapsed = totalElapsedMs();
+    const finalDistance = distanceM;
+    const finalRoute = route;
     stopTicker();
     stopWatches();
     accumulatedMsRef.current = 0;
+    startedAtRef.current = 0;
     lastPointRef.current = null;
     setStatus('idle');
-    setElapsedMs(finalElapsed);
+    setElapsedMs(0);
+    setDistanceM(0);
+    setRoute([]);
     return {
       elapsedMs: finalElapsed,
-      distanceM,
-      route,
+      distanceM: finalDistance,
+      route: finalRoute,
     };
   };
 

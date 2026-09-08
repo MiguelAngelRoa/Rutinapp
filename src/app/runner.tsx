@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   Linking,
   Modal,
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import * as Location from 'expo-location';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
@@ -32,6 +35,7 @@ import {
   deleteRun,
   loadRuns,
   saveRun,
+  type RunRoutePoint,
   type RunSession,
 } from '@/services/run-storage';
 import { formatTime, localDateKey } from '@/utils/format';
@@ -55,12 +59,11 @@ export default function RunnerScreen() {
   const rawGoal = Array.isArray(params.goal) ? params.goal[0] : params.goal;
   const goalKm = rawGoal != null ? Number(rawGoal) : NaN;
   const goalActive = Number.isFinite(goalKm) && goalKm > 0;
-  const [view, setView] = useState<'run' | 'history'>(() =>
-    goalActive ? 'run' : 'history',
-  );
+  const [view, setView] = useState<'run' | 'history'>('run');
   const [runs, setRuns] = useState<RunSession[]>([]);
   const [summary, setSummary] = useState<RunSnapshot | null>(null);
   const [permissionDenied, setPermissionDenied] = useState(false);
+  const [showPlaces, setShowPlaces] = useState(true);
 
   useEffect(() => {
     if (goalActive && view !== 'run') setView('run');
@@ -121,16 +124,6 @@ export default function RunnerScreen() {
     Linking.openSettings();
   }, [requestPermission]);
 
-  const handlePrimary = () => {
-    if (status === 'idle') {
-      start();
-    } else if (status === 'running') {
-      pause();
-    } else {
-      resume();
-    }
-  };
-
   const handleFinish = () => {
     setSummary(finish());
   };
@@ -163,8 +156,144 @@ export default function RunnerScreen() {
   const bottomInset =
     safeAreaInsets.bottom + BottomTabInset + Spacing.four;
 
-  const primaryLabel =
-    status === 'idle' ? 'INICIAR' : status === 'running' ? 'PAUSAR' : 'REANUDAR';
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const metricsRef = useRef({
+    width: 0,
+    height: 0,
+    panelWidth: 0,
+    panelHeight: 0,
+  });
+  const [panelVisible, setPanelVisible] = useState(false);
+  const translate = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  const currentPosRef = useRef({ x: 0, y: 0 });
+  const startPosRef = useRef({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const xListener = translate.x.addListener(({ value }) => {
+      currentPosRef.current.x = value;
+    });
+    const yListener = translate.y.addListener(({ value }) => {
+      currentPosRef.current.y = value;
+    });
+    return () => {
+      translate.x.removeListener(xListener);
+      translate.y.removeListener(yListener);
+    };
+  }, [translate]);
+
+  const clampPos = (x: number, y: number) => {
+    const m = metricsRef.current;
+    const maxX = Math.max(0, m.width - m.panelWidth);
+    const maxY = Math.max(0, m.height - m.panelHeight);
+    return {
+      x: Math.min(Math.max(0, x), maxX),
+      y: Math.min(Math.max(0, y), maxY),
+    };
+  };
+
+  const refreshPanelMetrics = () => {
+    const m = metricsRef.current;
+    if (!m.width || !m.height || !m.panelWidth || !m.panelHeight) return;
+    if (panelVisible) return;
+    setPanelVisible(true);
+    const initial = {
+      x: Math.max(0, m.width - m.panelWidth - Spacing.four),
+      y: Math.max(
+        0,
+        topInset + (m.height - topInset - bottomInset - m.panelHeight) / 2,
+      ),
+    };
+    translate.setValue(initial);
+  };
+
+  const handleMapContainerLayout = (event: {
+    nativeEvent: { layout: { width: number; height: number } };
+  }) => {
+    metricsRef.current.width = event.nativeEvent.layout.width;
+    metricsRef.current.height = event.nativeEvent.layout.height;
+    refreshPanelMetrics();
+  };
+
+  const handlePanelLayout = (event: {
+    nativeEvent: { layout: { width: number; height: number } };
+  }) => {
+    metricsRef.current.panelWidth = event.nativeEvent.layout.width;
+    metricsRef.current.panelHeight = event.nativeEvent.layout.height;
+    refreshPanelMetrics();
+  };
+
+  // Keep the panel inside the window if it rotates or resizes.
+  useEffect(() => {
+    if (!panelVisible) return;
+    metricsRef.current.width = windowWidth;
+    metricsRef.current.height = windowHeight;
+    const next = clampPos(currentPosRef.current.x, currentPosRef.current.y);
+    translate.setValue(next);
+  }, [windowWidth, windowHeight, panelVisible, translate]);
+
+  const snapToEdge = (pos: { x: number; y: number }, vx = 0) => {
+    const m = metricsRef.current;
+    const leftX = Spacing.four;
+    const rightX = Math.max(0, m.width - m.panelWidth - Spacing.four);
+    const panelCenterX = pos.x + m.panelWidth / 2;
+    const fling = Math.abs(vx) > 0.4;
+    const targetX = fling
+      ? vx > 0
+        ? rightX
+        : leftX
+      : panelCenterX < m.width / 2
+        ? leftX
+        : rightX;
+    const target = { x: targetX, y: clampPos(0, pos.y).y };
+    currentPosRef.current = target;
+    Animated.spring(translate, {
+      toValue: target,
+      useNativeDriver: false,
+      friction: 7,
+      tension: 60,
+    }).start();
+  };
+
+  const panelPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gesture) =>
+        Math.abs(gesture.dx) > 4 || Math.abs(gesture.dy) > 4,
+      onMoveShouldSetPanResponderCapture: (_, gesture) =>
+        Math.abs(gesture.dx) > 4 || Math.abs(gesture.dy) > 4,
+      onPanResponderGrant: () => {
+        translate.stopAnimation();
+        startPosRef.current = { ...currentPosRef.current };
+      },
+      onPanResponderMove: (_, gesture) => {
+        translate.setValue(
+          clampPos(
+            startPosRef.current.x + gesture.dx,
+            startPosRef.current.y + gesture.dy,
+          ),
+        );
+      },
+      onPanResponderRelease: (_, gesture) => {
+        snapToEdge(
+          clampPos(
+            startPosRef.current.x + gesture.dx,
+            startPosRef.current.y + gesture.dy,
+          ),
+          gesture.vx,
+        );
+      },
+      onPanResponderTerminate: (_, gesture) => {
+        snapToEdge(
+          clampPos(
+            startPosRef.current.x + gesture.dx,
+            startPosRef.current.y + gesture.dy,
+          ),
+          gesture.vx,
+        );
+      },
+      onPanResponderTerminationRequest: () => false,
+    }),
+  ).current;
 
   return (
     <View style={styles.screen}>
@@ -174,6 +303,7 @@ export default function RunnerScreen() {
             route={route}
             currentLocation={currentLocation}
             paused={status === 'paused'}
+            showPois={showPlaces}
           />
 
           {!currentLocation && status === 'idle' && (
@@ -301,24 +431,66 @@ export default function RunnerScreen() {
 
           <View
             pointerEvents="box-none"
-            style={[styles.bottomOverlay, { paddingBottom: bottomInset }]}
+            style={styles.mapPanelContainer}
+            onLayout={handleMapContainerLayout}
           >
-            <View style={[styles.controls, { maxWidth: MaxContentWidth }]}>
-              <Button
-                label={primaryLabel}
-                variant={status === 'idle' ? 'primary' : 'outline'}
-                onPress={handlePrimary}
-                style={styles.controlGrow}
-              />
-              {status !== 'idle' && (
-                <Button
-                  label="DETENER"
-                  variant="danger"
-                  onPress={handleFinish}
-                  style={[styles.controlGrow, styles.detenerButton]}
+            <Animated.View
+              {...panelPanResponder.panHandlers}
+              onLayout={handlePanelLayout}
+              pointerEvents={panelVisible ? 'auto' : 'none'}
+              style={[
+                styles.mapControlPanel,
+                { opacity: panelVisible ? 1 : 0 },
+                {
+                  transform: [
+                    { translateX: translate.x },
+                    { translateY: translate.y },
+                  ],
+                },
+              ]}
+            >
+              <View style={styles.panelDragHandle}>
+                <MaterialCommunityIcons
+                  name="drag"
+                  size={20}
+                  color={theme.textSecondary}
+                  accessibilityLabel="Arrastrar panel"
                 />
-              )}
-            </View>
+              </View>
+              <PanelIconButton
+                label={showPlaces ? 'Ocultar lugares' : 'Mostrar lugares'}
+                color={showPlaces ? theme.accent : theme.textSecondary}
+                icon={showPlaces ? 'map-marker-radius-outline' : 'map-marker-off-outline'}
+                onPress={() => setShowPlaces((current) => !current)}
+              />
+              <View style={styles.panelDivider} />
+              <PanelIconButton
+                label={
+                  status === 'idle'
+                    ? 'Iniciar'
+                    : status === 'running'
+                      ? 'Pausar'
+                      : 'Reanudar'
+                }
+                color={
+                  status === 'running' ? theme.success : theme.accent
+                }
+                icon={status === 'running' ? 'pause' : 'play'}
+                onPress={() => {
+                  if (status === 'running') pause();
+                  else if (status === 'idle') start();
+                  else resume();
+                }}
+              />
+              <View style={styles.panelDivider} />
+              <PanelIconButton
+                label="Detener"
+                active={status !== 'idle'}
+                color={status !== 'idle' ? '#F04438' : theme.textSecondary}
+                icon="stop"
+                onPress={handleFinish}
+              />
+            </Animated.View>
           </View>
         </>
       ) : (
@@ -399,6 +571,131 @@ function StatBox({ label, value }: { label: string; value: string }) {
   );
 }
 
+function PanelIconButton({
+  label,
+  icon,
+  color,
+  active = true,
+  onPress,
+}: {
+  label: string;
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  color: string;
+  active?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: !active }}
+      disabled={!active}
+      hitSlop={4}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.panelButton,
+        pressed && styles.pressed,
+      ]}
+    >
+      <MaterialCommunityIcons name={icon} size={24} color={color} />
+    </Pressable>
+  );
+}
+
+const THUMB_STROKE_PCT = 2.2;
+
+function RunRouteThumb({ route }: { route: RunRoutePoint[] }) {
+  const theme = useTheme();
+
+  if (route.length < 2) {
+    return (
+      <View style={[styles.thumbEmpty, { borderColor: theme.border }]}>
+        <MaterialCommunityIcons
+          name="image-off-outline"
+          size={20}
+          color={theme.textSecondary}
+        />
+        <ThemedText type="small" themeColor="textSecondary">
+          No hay imagen de la carrera.
+        </ThemedText>
+      </View>
+    );
+  }
+
+  const minLon = Math.min(...route.map((p) => p.longitude));
+  const maxLon = Math.max(...route.map((p) => p.longitude));
+  const minLat = Math.min(...route.map((p) => p.latitude));
+  const maxLat = Math.max(...route.map((p) => p.latitude));
+  const lonRange = maxLon - minLon || 1e-6;
+  const latRange = maxLat - minLat || 1e-6;
+
+  const norm = route.map((point) => {
+    const x = 5 + ((point.longitude - minLon) / lonRange) * 90;
+    const yBase = 5 + ((point.latitude - minLat) / latRange) * 90;
+    return { x, y: 100 - yBase };
+  });
+
+  const start = norm[0];
+  const end = norm[norm.length - 1];
+
+  return (
+    <View
+      style={[
+        styles.thumbBox,
+        {
+          borderColor: theme.border,
+          backgroundColor: theme.backgroundSelected,
+        },
+      ]}
+    >
+      {norm.slice(0, -1).map((point, i) => {
+        const next = norm[i + 1];
+        const dx = next.x - point.x;
+        const dy = next.y - point.y;
+        const length = Math.hypot(dx, dy);
+        const angle = Math.atan2(dy, dx);
+        return (
+          <View
+            key={i}
+            style={[
+              styles.thumbSegment,
+              {
+                left: `${(point.x + next.x) / 2 - length / 2}%`,
+                top: `${(point.y + next.y) / 2 - THUMB_STROKE_PCT / 2}%`,
+                width: `${length}%`,
+                height: `${THUMB_STROKE_PCT}%`,
+                backgroundColor: theme.accent,
+                transform: [{ rotate: `${angle}rad` }],
+              },
+            ]}
+          />
+        );
+      })}
+      <View
+        style={[
+          styles.thumbDot,
+          {
+            left: `${start.x}%`,
+            top: `${start.y}%`,
+            backgroundColor: theme.success,
+          },
+        ]}
+      />
+      <View
+        style={[
+          styles.thumbDot,
+          {
+            left: `${end.x}%`,
+            top: `${end.y}%`,
+            backgroundColor: theme.accent,
+            borderColor: theme.background,
+          },
+        ]}
+      />
+    </View>
+  );
+}
+
 function HistoryView({
   runs,
   topInset,
@@ -466,6 +763,7 @@ function HistoryView({
                     />
                   </Pressable>
                 </View>
+                <RunRouteThumb route={run.route} />
                 <View style={styles.runCardStats}>
                   <View style={styles.runCardStat}>
                     <ThemedText type="smallBold" style={{ color: theme.accent }}>
@@ -612,27 +910,40 @@ const styles = StyleSheet.create({
   permissionAction: {
     paddingVertical: Spacing.one,
   },
-  bottomOverlay: {
+  mapPanelContainer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  mapControlPanel: {
     position: 'absolute',
-    bottom: 0,
     left: 0,
-    right: 0,
+    top: 0,
+    backgroundColor: 'rgba(22, 22, 28, 0.92)',
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: '#4A4A52',
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.one,
     alignItems: 'center',
-    paddingHorizontal: Spacing.five,
-    paddingTop: Spacing.three,
   },
-  controls: {
-    width: '100%',
-    flexDirection: 'row',
-    gap: Spacing.three,
+  panelDragHandle: {
+    width: 44,
+    height: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.one,
   },
-  controlGrow: {
-    flex: 1,
+  panelButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Radius.full,
   },
-  detenerButton: {
-    marginLeft: 0,
-    borderWidth: 1.5,
-    borderColor: '#F04438',
+  panelDivider: {
+    width: 28,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#4A4A52',
+    marginVertical: Spacing.one,
   },
   historyScroll: {
     flex: 1,
@@ -675,6 +986,36 @@ const styles = StyleSheet.create({
   runCardStat: {
     flex: 1,
     gap: Spacing.half,
+  },
+  thumbBox: {
+    width: '100%',
+    height: 120,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  thumbSegment: {
+    position: 'absolute',
+    borderRadius: Radius.sm,
+  },
+  thumbDot: {
+    position: 'absolute',
+    width: 8,
+    height: 8,
+    marginLeft: -4,
+    marginTop: -4,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  thumbEmpty: {
+    height: 120,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.two,
   },
   modalOverlay: {
     flex: 1,

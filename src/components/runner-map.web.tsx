@@ -6,12 +6,14 @@ type RunnerMapProps = {
   route: { latitude: number; longitude: number }[];
   currentLocation: { latitude: number; longitude: number } | null;
   paused: boolean;
+  showPois: boolean;
 };
 
 export default function RunnerMap({
   route: _route,
   currentLocation: _currentLocation,
   paused: _paused,
+  showPois: _showPois,
 }: RunnerMapProps) {
   return (
     // MapLibre has no web implementation: show a themed placeholder so
