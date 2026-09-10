@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
+  AppState,
   Linking,
   Modal,
   PanResponder,
@@ -47,11 +49,13 @@ export default function RunnerScreen() {
     distanceM,
     route,
     currentLocation,
+    isHydrating,
     refreshLocation,
     start,
     pause,
     resume,
     finish,
+    hydrate,
   } = useRunner();
   const theme = useTheme();
   const safeAreaInsets = useSafeAreaInsets();
@@ -61,8 +65,10 @@ export default function RunnerScreen() {
   const goalActive = Number.isFinite(goalKm) && goalKm > 0;
   const [view, setView] = useState<'run' | 'history'>('run');
   const [runs, setRuns] = useState<RunSession[]>([]);
+  const [loadingRuns, setLoadingRuns] = useState(true);
   const [summary, setSummary] = useState<RunSnapshot | null>(null);
   const [permissionDenied, setPermissionDenied] = useState(false);
+  const [bgPermissionNeeded, setBgPermissionNeeded] = useState(false);
   const [showPlaces, setShowPlaces] = useState(true);
 
   useEffect(() => {
@@ -82,8 +88,34 @@ export default function RunnerScreen() {
     };
   }, [status]);
 
+  // Reconcile the run state when the app returns to the foreground, so the
+  // route/distance captured by the background task show up in the UI.
   useEffect(() => {
-    loadRuns().then(setRuns);
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next === 'active') {
+        hydrate();
+        if (Platform.OS !== 'web') {
+          Location.getBackgroundPermissionsAsync()
+            .then((bg) => setBgPermissionNeeded(bg.status !== 'granted'))
+            .catch(() => {});
+        }
+      }
+    });
+    return () => subscription.remove();
+  }, [hydrate]);
+
+  // Reconcile any in-progress run when the runner screen mounts (e.g. the user
+  // navigated away to another tab mid-run and comes back).
+  useEffect(() => {
+    hydrate();
+  }, [hydrate]);
+
+  useEffect(() => {
+    setLoadingRuns(true);
+    loadRuns().then((loaded) => {
+      setRuns(loaded);
+      setLoadingRuns(false);
+    });
   }, []);
 
   useEffect(() => {
@@ -110,6 +142,24 @@ export default function RunnerScreen() {
     };
   }, [view, refreshLocation]);
 
+  // Check background location permission so the user can enable it before starting.
+  useEffect(() => {
+    if (Platform.OS === 'web' || view !== 'run') return;
+    let active = true;
+    const check = async () => {
+      try {
+        const bg = await Location.getBackgroundPermissionsAsync();
+        if (active) setBgPermissionNeeded(bg.status !== 'granted');
+      } catch {
+        // Best-effort
+      }
+    };
+    check();
+    return () => {
+      active = false;
+    };
+  }, [view]);
+
   const requestPermission = useCallback(async () => {
     const permission = await Location.requestForegroundPermissionsAsync();
     setPermissionDenied(permission.status !== 'granted');
@@ -125,7 +175,13 @@ export default function RunnerScreen() {
   }, [requestPermission]);
 
   const handleFinish = () => {
-    setSummary(finish());
+    finish().then(setSummary).catch(() => {
+      setSummary({
+        elapsedMs: elapsedMs,
+        distanceM: distanceM,
+        route: route,
+      });
+    });
   };
 
   const handleSaveSummary = async () => {
@@ -295,6 +351,21 @@ export default function RunnerScreen() {
     }),
   ).current;
 
+  if (isHydrating) {
+    return (
+      <View style={[styles.screen, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color={theme.accent} />
+        <ThemedText
+          type="small"
+          themeColor="textSecondary"
+          style={styles.loadingText}
+        >
+          Cargando...
+        </ThemedText>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.screen}>
       {view === 'run' ? (
@@ -308,11 +379,7 @@ export default function RunnerScreen() {
 
           {!currentLocation && status === 'idle' && (
             <View style={styles.mapFallback}>
-              <MaterialCommunityIcons
-                name="map-marker-radius-outline"
-                size={32}
-                color={theme.textSecondary}
-              />
+              <ActivityIndicator size="large" color={theme.accent} />
               <ThemedText
                 type="small"
                 themeColor="textSecondary"
@@ -390,6 +457,7 @@ export default function RunnerScreen() {
       ) : (
         <HistoryView
           runs={runs}
+          loading={loadingRuns}
           topInset={topInset}
           bottomInset={bottomInset}
           onDelete={handleDeleteRun}
@@ -512,6 +580,38 @@ export default function RunnerScreen() {
                       </ThemedText>
                     </Pressable>
                   )}
+                </View>
+              </ThemedView>
+            )}
+
+            {bgPermissionNeeded && Platform.OS !== 'web' && (
+              <ThemedView
+                type="backgroundElement"
+                style={[styles.permissionBanner, { borderColor: theme.border }]}
+              >
+                <ThemedText type="small" style={styles.permissionText}>
+                  Activa la ubicación en segundo plano para seguir grabando tu
+                  ruta aunque minimices la app.
+                </ThemedText>
+                <View style={styles.permissionActions}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => {
+                      Location.requestBackgroundPermissionsAsync()
+                        .then((bg) =>
+                          setBgPermissionNeeded(bg.status !== 'granted'),
+                        )
+                        .catch(() => {});
+                    }}
+                    style={({ pressed }) => [
+                      styles.permissionAction,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <ThemedText type="smallBold" style={{ color: theme.accent }}>
+                      Configurar
+                    </ThemedText>
+                  </Pressable>
                 </View>
               </ThemedView>
             )}
@@ -714,18 +814,35 @@ function RunRouteThumb({ route }: { route: RunRoutePoint[] }) {
 
 function HistoryView({
   runs,
+  loading,
   topInset,
   bottomInset,
   onDelete,
   onStartRun,
 }: {
   runs: RunSession[];
+  loading: boolean;
   topInset: number;
   bottomInset: number;
   onDelete: (id: string) => void;
   onStartRun: () => void;
 }) {
   const theme = useTheme();
+
+  if (loading) {
+    return (
+      <View style={[styles.screen, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color={theme.accent} />
+        <ThemedText
+          type="small"
+          themeColor="textSecondary"
+          style={styles.loadingText}
+        >
+          Cargando historial...
+        </ThemedText>
+      </View>
+    );
+  }
 
   return (
     <ScrollView
@@ -838,6 +955,15 @@ function formatRunDate(isoDate: string): string {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.two,
+    backgroundColor: '#000000',
+  },
+  loadingText: {
+    marginTop: Spacing.one,
   },
   mapFallback: {
     position: 'absolute',

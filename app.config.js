@@ -28,7 +28,7 @@ export default {
   ios: {
     icon: './assets/images/icon.png',
     infoPlist: {
-      UIBackgroundModes: ['audio', 'fetch', 'remote-notification'],
+      UIBackgroundModes: ['audio', 'fetch', 'remote-notification', 'location'],
       NSMotionUsageDescription:
         'Rutinapp cuenta tus pasos mientras corres para medir tu actividad.',
     },
@@ -40,7 +40,12 @@ export default {
       backgroundImage: './assets/images/android-icon-background.png',
       monochromeImage: './assets/images/android-icon-monochrome.png',
     },
-    permissions: ['NOTIFICATIONS'],
+    permissions: [
+      'NOTIFICATIONS',
+      'ACCESS_BACKGROUND_LOCATION',
+      'FOREGROUND_SERVICE',
+      'FOREGROUND_SERVICE_LOCATION',
+    ],
     predictiveBackGestureEnabled: false,
     package: variant.package,
     intentFilters: [
@@ -106,6 +111,11 @@ export default {
       {
         locationWhenInUsePermission:
           'Rutinapp usa tu ubicación para trazar tu ruta y medir la distancia de tus carreras.',
+        locationAlwaysAndWhenInUsePermission:
+          'Rutinapp necesita acceder a tu ubicación para seguir grabando tu ruta aunque la app esté en segundo plano.',
+        isIosBackgroundLocationEnabled: true,
+        isAndroidBackgroundLocationEnabled: true,
+        isAndroidForegroundServiceEnabled: true,
       },
     ],
     [
