@@ -51,12 +51,12 @@ async function handleLocations(locations: Location.LocationObject[]) {
   if (!run || run.startedAt === null) return;
 
   for (const location of locations) {
-    emitRunCoords({
-      latitude: location.coords.latitude,
-      longitude: location.coords.longitude,
-    });
     const update = addFix(run, toFix(location));
     if (update) {
+      emitRunCoords({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      });
       emitRunState({
         route: update.route,
         distanceM: update.distanceM,

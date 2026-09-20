@@ -4,9 +4,9 @@ Tu entrenador personal en el bolsillo: prepara tus rutinas, organízalas en una
 agenda semanal y entrena con un temporizador de descanso integrado. Y cuando
 quieras, cambia al modo Runner y sal a correr con mapa en vivo.
 
-> 🏃 Rutinas en el gimnasio + carreras con mapa. Todo en una sola app.
+> 🏋️ Rutinas en el gimnasio + carreras con mapa. Todo en una sola app.
 
-## ✨ ¿Qué puedes hacer?
+## 📋 ¿Qué puedes hacer?
 
 ### 🏋️ Entrena con método
 
@@ -33,7 +33,7 @@ quieras, cambia al modo Runner y sal a correr con mapa en vivo.
   lo consigues.
 - Historial con todas tus carreras guardadas.
 
-## 🧭 Dos modos, un solo toque
+## 🔄 Dos modos, un solo toque
 
 - **Rutina** — Entrenamiento, programa y agenda semanal.
 - **Runner** — Correr con mapa, metas y tu historial de carreras.
@@ -55,7 +55,7 @@ vender. Puedes usar la app incluso sin conexión.
 
 ---
 
-Hecha con 🧡 usando **React Native**.
+Hecha con dedicación usando **React Native**.
 
 ## 📄 Licencia
 

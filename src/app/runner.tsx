@@ -41,6 +41,7 @@ import {
   type RunSession,
 } from '@/services/run-storage';
 import { formatTime, localDateKey } from '@/utils/format';
+import { simplifyRoute } from '@/utils/route-simplify';
 
 export default function RunnerScreen() {
   const {
@@ -719,11 +720,16 @@ function PanelIconButton({
 }
 
 const THUMB_STROKE_PCT = 2.2;
+/** Simplification tolerance for the history thumbnail: larger than the live
+ *  map so the leftover GPS noise of old saved runs collapses into one line. */
+const THUMB_SIMPLIFY_TOLERANCE_M = 10;
 
 function RunRouteThumb({ route }: { route: RunRoutePoint[] }) {
   const theme = useTheme();
 
-  if (route.length < 2) {
+  const simplified = simplifyRoute(route, THUMB_SIMPLIFY_TOLERANCE_M);
+
+  if (simplified.length < 2) {
     return (
       <View style={[styles.thumbEmpty, { borderColor: theme.border }]}>
         <MaterialCommunityIcons
@@ -738,14 +744,14 @@ function RunRouteThumb({ route }: { route: RunRoutePoint[] }) {
     );
   }
 
-  const minLon = Math.min(...route.map((p) => p.longitude));
-  const maxLon = Math.max(...route.map((p) => p.longitude));
-  const minLat = Math.min(...route.map((p) => p.latitude));
-  const maxLat = Math.max(...route.map((p) => p.latitude));
+  const minLon = Math.min(...simplified.map((p) => p.longitude));
+  const maxLon = Math.max(...simplified.map((p) => p.longitude));
+  const minLat = Math.min(...simplified.map((p) => p.latitude));
+  const maxLat = Math.max(...simplified.map((p) => p.latitude));
   const lonRange = maxLon - minLon || 1e-6;
   const latRange = maxLat - minLat || 1e-6;
 
-  const norm = route.map((point) => {
+  const norm = simplified.map((point) => {
     const x = 5 + ((point.longitude - minLon) / lonRange) * 90;
     const yBase = 5 + ((point.latitude - minLat) / latRange) * 90;
     return { x, y: 100 - yBase };

@@ -11,9 +11,13 @@ import {
 export const MIN_DISTANCE_M = 3;
 /** Fixes with a worse accuracy radius than this are treated as noise. */
 export const MIN_ACCURACY_M = 18;
-/** A fix this far away from the previous one in a very short time is a glitch. */
-export const MAX_SPURIOUS_JUMP_M = 40;
-export const SPURIOUS_JUMP_TIME_MS = 2000;
+/**
+ * Maximum plausible average speed between consecutive fixes (m/s).
+ * The location task samples every ~2 s, so 12 m/s means a 24 m step: far
+ * beyond any running pace and well below a satellite jump. Anything faster is
+ * a GPS glitch that would draw a spike (extra crossing lines) on the route.
+ */
+export const MAX_SPEED_MPS = 12;
 
 const ACTIVE_RUN_KEY = 'rutinapp:active-run:v1';
 
@@ -59,6 +63,11 @@ export function runElapsedMs(run: ActiveRun, now: number): number {
  * Applies the noise filters to a new GPS fix and, when it is accepted,
  * appends it to the run state. Returns the new route/distance snapshot to
  * broadcast, or `null` when the fix should be ignored.
+ *
+ * A fix is dropped when it is too close to the previous one, too inaccurate,
+ * or far enough in a short enough time to imply an impossible speed (a GPS
+ * jump). Rejected fixes never become `lastPoint`, so the route stays a single
+ * clean line instead of drawing spikes back and forth.
  */
 export function addFix(
   run: ActiveRun,
@@ -89,9 +98,9 @@ export function addFix(
   if (diff < MIN_DISTANCE_M) return null;
 
   const timeGapMs = fix.timestampMs - run.lastFixAt;
-  if (timeGapMs < SPURIOUS_JUMP_TIME_MS && diff > MAX_SPURIOUS_JUMP_M) {
-    return null;
-  }
+  const speedMps =
+    timeGapMs > 0 ? (diff / timeGapMs) * 1000 : Number.POSITIVE_INFINITY;
+  if (speedMps > MAX_SPEED_MPS) return null;
 
   run.lastPoint = point;
   run.route = [...run.route, point];
