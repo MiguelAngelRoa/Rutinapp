@@ -25,6 +25,7 @@
     "expo-linking": "~8.0.12",
     "expo-location": "~19.0.8",
     "expo-notifications": "~0.32.17",
+    "expo-pip": "^2.1.0",
     "expo-router": "~6.0.24",
     "expo-sensors": "~15.0.8",
     "expo-sharing": "~14.0.8",
@@ -50,9 +51,11 @@
     "@types/react": "~19.1.10",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~10.0.0",
+    "patch-package": "^8.0.1",
     "typescript": "~5.9.2"
   },
   "scripts": {
+    "postinstall": "patch-package",
     "start": "expo start --tunnel",
     "build:local": "node ./scripts/build-local.js",
     "reset-project": "node ./scripts/reset-project.js",
@@ -64,5 +67,14 @@
     "dev:ios": "APP_VARIANT=development expo start --tunnel --dev-client --ios",
     "lint": "expo lint"
   },
-  "private": true
+  "private": true,
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "expo-pip"
+        ]
+      }
+    }
+  }
 }

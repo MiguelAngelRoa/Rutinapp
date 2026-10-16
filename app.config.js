@@ -41,7 +41,8 @@ export default {
       monochromeImage: './assets/images/android-icon-monochrome.png',
     },
     permissions: [
-      'NOTIFICATIONS',
+      'POST_NOTIFICATIONS',
+      'SCHEDULE_EXACT_ALARM',
       'ACCESS_BACKGROUND_LOCATION',
       'FOREGROUND_SERVICE',
       'FOREGROUND_SERVICE_LOCATION',
@@ -99,11 +100,14 @@ export default {
       },
     ],
     'expo-audio',
+    ['expo-pip', {}],
+    ['./plugins/with-pip-fixed-size', { width: 150, height: 100 }],
     [
       'expo-notifications',
       {
         color: '#A3E635',
         icon: './assets/images/notification-icon.png',
+        sounds: ['./assets/sounds/rest_finish.wav', './assets/sounds/silbato.mp3'],
       },
     ],
     [

@@ -17,14 +17,23 @@ const CHANNEL_ID = 'agenda';
 if (Platform.OS !== 'web') {
   Notifications.setNotificationHandler({
     handleNotification: async (notification) => {
-      // Rest-finish notifications are shown as native notifications even in
-      // the foreground. Their sound is left to the in-app beep to avoid a
-      // double alert; agenda notifications stay list-only as before.
+      // Rest-finish alerts must never surface as a system notification while the
+      // app is in the foreground: the in-app whistle already alerts the user.
+      // In the background/PiP the native service presents them directly (this
+      // handler is not consulted), so the alert still reaches the user there.
       const isRest = notification.request.content.data?.kind === 'rest';
+      if (isRest) {
+        return {
+          shouldShowBanner: false,
+          shouldShowList: false,
+          shouldPlaySound: false,
+          shouldSetBadge: false,
+        };
+      }
       return {
-        shouldShowBanner: isRest,
+        shouldShowBanner: false,
         shouldShowList: true,
-        shouldPlaySound: isRest ? false : true,
+        shouldPlaySound: true,
         shouldSetBadge: false,
       };
     },

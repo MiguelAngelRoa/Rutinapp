@@ -71,6 +71,7 @@ export default function RunnerScreen() {
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [bgPermissionNeeded, setBgPermissionNeeded] = useState(false);
   const [showPlaces, setShowPlaces] = useState(true);
+  const [mapLoading, setMapLoading] = useState(false);
 
   useEffect(() => {
     if (goalActive && view !== 'run') setView('run');
@@ -376,6 +377,7 @@ export default function RunnerScreen() {
             currentLocation={currentLocation}
             paused={status === 'paused'}
             showPois={showPlaces}
+            onLoadingChange={setMapLoading}
           />
 
           {!currentLocation && status === 'idle' && (
@@ -619,6 +621,19 @@ export default function RunnerScreen() {
           </>
         )}
       </View>
+
+      {view === 'run' && mapLoading && (
+        <View pointerEvents="auto" style={styles.mapLoadingOverlay}>
+          <ActivityIndicator size="large" color={theme.accent} />
+          <ThemedText
+            type="small"
+            themeColor="textSecondary"
+            style={styles.centerText}
+          >
+            Cargando el mapa…
+          </ThemedText>
+        </View>
+      )}
 
       <Modal
         visible={summary != null}
@@ -980,6 +995,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.two,
+  },
+  mapLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.two,
+    backgroundColor: 'rgba(10, 10, 14, 0.72)',
   },
   centerText: {
     textAlign: 'center',

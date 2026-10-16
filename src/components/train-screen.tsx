@@ -1,23 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Modal,
+  AppState,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
+  TextInput,
   Vibration,
   View,
 } from "react-native";
 import Animated, {
   interpolate,
   interpolateColor,
+  useAnimatedProps,
   useAnimatedStyle,
+  useFrameCallback,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAudioPlayer, type AudioPlayer } from "expo-audio";
+import ExpoPip from "expo-pip";
 import * as Notifications from "expo-notifications";
 
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
@@ -34,15 +39,20 @@ import {
   TopInset,
 } from "@/constants/theme";
 import { useWorkout } from "@/context/workout-context";
-import { useRestTimer } from "@/hooks/use-rest-timer";
+import { useRestTimer, openNotificationSettings, openExactAlarmSettings } from "@/hooks/use-rest-timer";
 import { useTheme } from "@/hooks/use-theme";
 import { mondayFirstIndex, type Routine } from "@/types/workout";
-import { localDateKey } from "@/utils/format";
+import { localDateKey, formatTime } from "@/utils/format";
 
 type TrainScreenProps = {
   /** Overrides the top inset (safe area + web TopInset) when embedded below a header. */
   contentTopInset?: number;
 };
+
+const AnimatedTextInput = Animated.createAnimatedComponent(TextInput);
+
+const PIP_WIDTH = 150;
+const PIP_HEIGHT = 100;
 
 export function TrainScreen({ contentTopInset }: TrainScreenProps) {
   const { routine, routines, schedule, dismissedPlanDate, dismissTodayPlan } = useWorkout();
@@ -54,6 +64,7 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
   const [undoModalVisible, setUndoModalVisible] = useState(false);
   const [forwardModalVisible, setForwardModalVisible] = useState(false);
   const [loadedRoutineId, setLoadedRoutineId] = useState<string | null>(null);
+  const [exactAlarmHintDismissed, setExactAlarmHintDismissed] = useState(false);
   const restTimer = useRestTimer();
   const theme = useTheme();
   const safeAreaInsets = useSafeAreaInsets();
@@ -185,8 +196,15 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
 
   const completeSet = () => {
     if (exercise == null) return;
-    setCompletedSets((count) => count + 1);
+    const nextCompleted = completedSets + 1;
+    const closesWorkout = isLastExercise && nextCompleted >= exercise.sets;
+    setCompletedSets(nextCompleted);
     playBeep(setDoneSound);
+    if (closesWorkout) {
+      restTimer.stop();
+      setDone(true);
+      return;
+    }
     restTimer.start(exercise.restSeconds);
   };
 
@@ -277,6 +295,91 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
   const insets = {
     top: contentTopInset ?? safeAreaInsets.top + TopInset,
   };
+
+  const pip = ExpoPip.useIsInPip();
+
+  const pipEndTime = useSharedValue(0);
+  const pipRemaining = useSharedValue(0);
+
+  useEffect(() => {
+    pipEndTime.value = restTimer.endTime ?? 0;
+    pipRemaining.value = restTimer.remainingSeconds;
+  }, [
+    restTimer.endTime,
+    restTimer.remainingSeconds,
+    pipEndTime,
+    pipRemaining,
+  ]);
+
+  const pipFrame = useFrameCallback(() => {
+    const end = pipEndTime.value;
+    pipRemaining.value =
+      end <= 0 ? 0 : Math.max(0, Math.ceil((end - Date.now()) / 1000));
+  }, false);
+
+  useEffect(() => {
+    pipFrame.setActive(restTimer.phase === "resting");
+  }, [restTimer.phase, pipFrame]);
+
+  const pipClockProps = useAnimatedProps(() => {
+    const total = pipRemaining.value;
+    const minutes = Math.floor(total / 60);
+    const seconds = total % 60;
+    const text = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+    return { text } as never;
+  });
+
+  const pipBgStyle = useAnimatedStyle(() => ({
+    backgroundColor: pipRemaining.value <= 0 ? theme.success : theme.accent,
+  }));
+
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const inRestPhase = restTimer.phase === "resting" || restTimer.phase === "finished";
+    if (inRestPhase) {
+      try {
+        ExpoPip.setPictureInPictureParams({
+          autoEnterEnabled: true,
+          width: PIP_WIDTH,
+          height: PIP_HEIGHT,
+          seamlessResizeEnabled: true,
+        });
+      } catch {}
+      const sub = AppState.addEventListener("change", (state) => {
+        if (state === "background") {
+          try {
+            ExpoPip.enterPipMode({ width: PIP_WIDTH, height: PIP_HEIGHT });
+          } catch {}
+        }
+      });
+      return () => sub.remove();
+    } else {
+      try {
+        ExpoPip.setPictureInPictureParams({ autoEnterEnabled: false });
+      } catch {}
+    }
+    return undefined;
+  }, [restTimer.phase]);
+
+  if (pip.isInPipMode) {
+    return (
+      <Animated.View
+        style={[styles.pipScreen, { backgroundColor: theme.background }]}
+      >
+        <Animated.View style={[styles.pipCard, pipBgStyle]}>
+          <AnimatedTextInput
+            editable={false}
+            underlineColorAndroid="transparent"
+            animatedProps={pipClockProps}
+            defaultValue={formatTime(restTimer.remainingSeconds)}
+            style={styles.pipTime}
+          />
+        </Animated.View>
+      </Animated.View>
+    );
+  }
+
+
 
   const todayPlanDismissed = dismissedPlanDate === localDateKey(new Date());
 
@@ -382,6 +485,59 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
                 </View>
 
                 {todayPlanCard}
+
+                {restTimer.notificationPermission === false ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Activar notificaciones de descanso"
+                    onPress={() => {
+                      restTimer.requestNotificationPermission().then((granted) => {
+                        if (!granted) openNotificationSettings();
+                      });
+                    }}
+                    style={({ pressed }) => [
+                      styles.notificationBanner,
+                      { backgroundColor: theme.accentSoft },
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <MaterialCommunityIcons
+                      name="bell-off-outline"
+                      size={18}
+                      color={theme.accent}
+                    />
+                    <ThemedText type="small" style={styles.notificationBannerText}>
+                      Activa las notificaciones para que te avise al terminar el descanso
+                    </ThemedText>
+                  </Pressable>
+                ) : null}
+
+                {Platform.OS === "android" &&
+                restTimer.notificationPermission === true &&
+                !exactAlarmHintDismissed ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Permitir alarmas exactas"
+                    onPress={() => {
+                      setExactAlarmHintDismissed(true);
+                      openExactAlarmSettings();
+                    }}
+                    style={({ pressed }) => [
+                      styles.notificationBanner,
+                      { backgroundColor: theme.accentSoft },
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <MaterialCommunityIcons
+                      name="clock-alert-outline"
+                      size={18}
+                      color={theme.accent}
+                    />
+                    <ThemedText type="small" style={styles.notificationBannerText}>
+                      Permite las alarmas exactas para que el descanso avise puntual en segundo plano
+                    </ThemedText>
+                  </Pressable>
+                ) : null}
 
                 <Animated.View style={styles.hero}>
                   <View style={styles.heroBody}>
@@ -729,7 +885,7 @@ function EmptyView() {
         themeColor="textSecondary"
         style={styles.centerText}
       >
-        Agrega ejercicios en la pestaña «Rutina» para empezar a entrenar.
+        Agrega ejercicios en la pestaña «Programa» para empezar a entrenar.
       </ThemedText>
     </View>
   );
@@ -895,6 +1051,38 @@ const styles = StyleSheet.create({
   },
   restartButton: {
     marginTop: Spacing.two,
+  },
+  pipScreen: {
+    flex: 1,
+    padding: 4,
+  },
+  pipCard: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+  pipTime: {
+    color: "#000000",
+    fontSize: 30,
+    lineHeight: 36,
+    fontWeight: 700,
+    textAlign: "center",
+    fontVariant: ["tabular-nums"],
+    padding: 0,
+  },
+  notificationBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.two,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    borderRadius: Radius.md,
+    marginBottom: Spacing.three,
+  },
+  notificationBannerText: {
+    flex: 1,
   },
   modalOverlay: {
     flex: 1,

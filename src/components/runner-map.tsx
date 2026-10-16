@@ -26,6 +26,9 @@ const MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
 const CAMERA_ZOOM = 15;
 const POI_REFRESH_DEBOUNCE_MS = 600;
 const ROUTE_SIMPLIFY_TOLERANCE_M = 5;
+/** If the map or its POIs never finish loading (e.g. offline), release the
+ *  loading lock after a while so the runner UI is never stuck blocked. */
+const INITIAL_LOAD_TIMEOUT_MS = 15000;
 
 const POI_NAME_FIELD: ExpressionSpecification = [
   'case',
@@ -100,6 +103,8 @@ type RunnerMapProps = {
   currentLocation: { latitude: number; longitude: number } | null;
   paused: boolean;
   showPois: boolean;
+  /** Fired while the initial map tiles and first POIs are still loading. */
+  onLoadingChange?: (isLoading: boolean) => void;
 };
 
 type PoiTierProps = {
@@ -201,6 +206,7 @@ export default function RunnerMap({
   currentLocation,
   paused,
   showPois,
+  onLoadingChange,
 }: RunnerMapProps) {
   const cameraRef = useRef<CameraRef>(null);
   const centeredRef = useRef(false);
@@ -208,6 +214,29 @@ export default function RunnerMap({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const generationRef = useRef(0);
   const [poiData, setPoiData] = useState(emptyPoiCollection);
+  const [loading, setLoading] = useState(true);
+  const mapReadyRef = useRef(false);
+  const firstPoiDoneRef = useRef(false);
+  const loadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const updateLoading = useCallback(() => {
+    setLoading(!(mapReadyRef.current && firstPoiDoneRef.current));
+  }, []);
+
+  const handleMapWillStartLoading = useCallback(() => {
+    mapReadyRef.current = false;
+    updateLoading();
+  }, [updateLoading]);
+
+  const handleMapDidFinishLoading = useCallback(() => {
+    mapReadyRef.current = true;
+    updateLoading();
+  }, [updateLoading]);
+
+  const handleMapDidFailLoading = useCallback(() => {
+    mapReadyRef.current = true;
+    updateLoading();
+  }, [updateLoading]);
 
   useEffect(() => {
     if (paused || !currentLocation) return;
@@ -234,9 +263,12 @@ export default function RunnerMap({
         }
       } catch {
         // Network failures keep the last successfully loaded POIs on screen.
+      } finally {
+        firstPoiDoneRef.current = true;
+        updateLoading();
       }
     },
-    [showPois],
+    [showPois, updateLoading],
   );
 
   const schedulePoiRefresh = useCallback(
@@ -273,8 +305,37 @@ export default function RunnerMap({
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
     };
   }, []);
+
+  // Report the loading phase to the parent and add a safety valve so the
+  // runner UI is never left blocked if a load never settles.
+  useEffect(() => {
+    onLoadingChange?.(loading);
+    if (loading) {
+      if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
+      loadTimeoutRef.current = setTimeout(
+        () => {
+          mapReadyRef.current = true;
+          firstPoiDoneRef.current = true;
+          setLoading(false);
+        },
+        INITIAL_LOAD_TIMEOUT_MS,
+      );
+    } else if (loadTimeoutRef.current) {
+      clearTimeout(loadTimeoutRef.current);
+      loadTimeoutRef.current = null;
+    }
+  }, [loading, onLoadingChange]);
+
+  // Without POIs there is nothing to wait for once the tiles are in.
+  useEffect(() => {
+    if (!showPois) {
+      firstPoiDoneRef.current = true;
+      updateLoading();
+    }
+  }, [showPois, updateLoading]);
 
   const routeData: GeoJSON.FeatureCollection | null =
     route.length > 1
@@ -318,8 +379,14 @@ export default function RunnerMap({
       mapStyle={MAP_STYLE_URL}
       logo={false}
       attribution={false}
+      pointerEvents={loading ? 'none' : 'auto'}
+      onWillStartLoadingMap={handleMapWillStartLoading}
+      onDidFinishLoadingMap={() => {
+        handleMapDidFinishLoading();
+        refreshFromMap();
+      }}
+      onDidFailLoadingMap={handleMapDidFailLoading}
       onRegionDidChange={handleRegionDidChange}
-      onDidFinishLoadingMap={refreshFromMap}
     >
       <Camera
         ref={cameraRef}

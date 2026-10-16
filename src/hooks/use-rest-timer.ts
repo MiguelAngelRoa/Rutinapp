@@ -1,10 +1,11 @@
 import * as Notifications from 'expo-notifications';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Linking, Platform } from 'react-native';
 
 export type RestPhase = 'idle' | 'resting' | 'finished';
 
-const REST_CHANNEL_ID = 'rest';
+const REST_CHANNEL_ID = 'rest-v3';
+const REST_SOUND = 'silbato.mp3';
 
 async function ensureRestChannel() {
   if (Platform.OS !== 'android') return;
@@ -12,7 +13,7 @@ async function ensureRestChannel() {
     name: 'Descanso entre series',
     description: 'Avisa cuando termina el descanso',
     importance: Notifications.AndroidImportance.HIGH,
-    sound: 'default',
+    sound: REST_SOUND,
   });
 }
 
@@ -25,7 +26,8 @@ function canPresent(permission: Notifications.NotificationPermissionsStatus): bo
 
 async function ensurePermission(): Promise<boolean> {
   let permission = await Notifications.getPermissionsAsync();
-  if (permission.status === 'undetermined') {
+  if (!canPresent(permission) && permission.status !== 'denied') {
+    await ensureRestChannel();
     permission = await Notifications.requestPermissionsAsync({
       ios: { allowAlert: true, allowBadge: true, allowSound: true },
     });
@@ -33,13 +35,40 @@ async function ensurePermission(): Promise<boolean> {
   return canPresent(permission);
 }
 
+export async function openNotificationSettings(): Promise<void> {
+  await Linking.openSettings();
+}
+
+export async function openExactAlarmSettings(): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  try {
+    await Linking.sendIntent('android.settings.REQUEST_SCHEDULE_EXACT_ALARM');
+  } catch {
+    await Linking.openSettings();
+  }
+}
+
 export function useRestTimer() {
   const [endTime, setEndTime] = useState<number | null>(null);
   const [now, setNow] = useState<number>(() => Date.now());
+  const [notificationPermission, setNotificationPermission] = useState<boolean | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scheduledNotificationRef = useRef<string | null>(null);
   const scheduleTokenRef = useRef(0);
   const endTimeRef = useRef<number | null>(null);
+
+  const refreshNotificationPermission = useCallback(async () => {
+    if (Platform.OS === 'web') return;
+    const permission = await Notifications.getPermissionsAsync();
+    setNotificationPermission(canPresent(permission));
+  }, []);
+
+  const requestNotificationPermission = useCallback(async () => {
+    if (Platform.OS === 'web') return false;
+    const granted = await ensurePermission();
+    setNotificationPermission(granted);
+    return granted;
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -58,6 +87,17 @@ export function useRestTimer() {
     };
   }, []);
 
+  useEffect(() => {
+    refreshNotificationPermission();
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        setNow(Date.now());
+        refreshNotificationPermission();
+      }
+    });
+    return () => subscription.remove();
+  }, [refreshNotificationPermission]);
+
   const scheduleRestFinishedNotification = useCallback(
     async (target: Date, token: number) => {
       if (Platform.OS === 'web') return;
@@ -74,7 +114,7 @@ export function useRestTimer() {
             title: '¡Descanso terminado!',
             body: 'Es hora de la siguiente serie.',
             data: { kind: 'rest' },
-            sound: 'default',
+            sound: REST_SOUND,
           },
           trigger: {
             type: Notifications.SchedulableTriggerInputTypes.DATE,
@@ -118,7 +158,7 @@ export function useRestTimer() {
           title: '¡Descanso terminado!',
           body: 'Es hora de la siguiente serie.',
           data: { kind: 'rest' },
-          sound: 'default',
+          sound: REST_SOUND,
         },
         trigger: null, // Trigger immediately
       });
@@ -204,5 +244,5 @@ export function useRestTimer() {
   const phase: RestPhase = endTime == null ? 'idle' : now >= endTime ? 'finished' : 'resting';
   const remainingSeconds = endTime == null ? 0 : Math.max(0, Math.ceil((endTime - now) / 1000));
 
-  return { phase, remainingSeconds, start, stop, finish, adjust };
+  return { phase, remainingSeconds, endTime, start, stop, finish, adjust, notificationPermission, requestNotificationPermission };
 }

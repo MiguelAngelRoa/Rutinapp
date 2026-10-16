@@ -1,3 +1,4 @@
+import ExpoPip from "expo-pip";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Tabs } from "expo-router";
 import { useState } from "react";
@@ -19,6 +20,7 @@ export default function AppTabs() {
   const { mode } = useMode();
   const isRunner = mode === "runner";
   const [menuVisible, setMenuVisible] = useState(false);
+  const pip = ExpoPip.useIsInPip();
 
   const openMenu = () => setMenuVisible(true);
 
@@ -29,10 +31,12 @@ export default function AppTabs() {
           headerShown: false,
           tabBarActiveTintColor: colors.accent,
           tabBarInactiveTintColor: colors.textSecondary,
-          tabBarStyle: {
-            backgroundColor: colors.backgroundDarker,
-            borderTopColor: colors.border,
-          },
+          tabBarStyle: pip.isInPipMode
+            ? { display: "none" }
+            : {
+                backgroundColor: colors.backgroundDarker,
+                borderTopColor: colors.border,
+              },
         }}
       >
         <Tabs.Screen

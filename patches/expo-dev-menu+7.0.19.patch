@@ -1,0 +1,41 @@
+diff --git a/node_modules/expo-dev-menu/android/src/main/java/expo/modules/devmenu/fab/FabUtils.kt b/node_modules/expo-dev-menu/android/src/main/java/expo/modules/devmenu/fab/FabUtils.kt
+index f4b164d..fac44bc 100644
+--- a/node_modules/expo-dev-menu/android/src/main/java/expo/modules/devmenu/fab/FabUtils.kt
++++ b/node_modules/expo-dev-menu/android/src/main/java/expo/modules/devmenu/fab/FabUtils.kt
+@@ -45,8 +45,8 @@ internal fun Offset.toIntOffset(): IntOffset {
+ 
+ internal fun Offset.coerceIn(minX: Float = 0f, maxX: Float, minY: Float = 0f, maxY: Float): Offset {
+   return this.copy(
+-    x = this.x.coerceIn(minX, maxX),
+-    y = this.y.coerceIn(minY, maxY)
++    x = this.x.coerceIn(minX, maxX.coerceAtLeast(minX)),
++    y = this.y.coerceIn(minY, maxY.coerceAtLeast(minY))
+   )
+ }
+ 
+diff --git a/node_modules/expo-dev-menu/android/src/main/java/expo/modules/devmenu/fab/MovableFloatingActionButton.kt b/node_modules/expo-dev-menu/android/src/main/java/expo/modules/devmenu/fab/MovableFloatingActionButton.kt
+index 40e6f2e..bffcdce 100644
+--- a/node_modules/expo-dev-menu/android/src/main/java/expo/modules/devmenu/fab/MovableFloatingActionButton.kt
++++ b/node_modules/expo-dev-menu/android/src/main/java/expo/modules/devmenu/fab/MovableFloatingActionButton.kt
+@@ -61,8 +61,8 @@ fun MovableFloatingActionButton(
+       Offset(totalFabSize.width.toPx(), totalFabSize.height.toPx())
+     }
+     val bounds = Offset(
+-      x = constraints.maxWidth - totalFabSizePx.x,
+-      y = constraints.maxHeight - totalFabSizePx.y
++      x = (constraints.maxWidth - totalFabSizePx.x).coerceAtLeast(0f),
++      y = (constraints.maxHeight - totalFabSizePx.y).coerceAtLeast(0f)
+     )
+ 
+     val previousBounds = rememberPrevious(bounds)
+@@ -75,8 +75,8 @@ fun MovableFloatingActionButton(
+       previousBounds?.let {
+         val oldX = animatedOffset.value.x
+         val oldY = animatedOffset.value.y
+-        val newX = (oldX / previousBounds.x) * bounds.x
+-        val newY = (oldY / previousBounds.y) * bounds.y
++        val newX = if (previousBounds.x == 0f) 0f else (oldX / previousBounds.x) * bounds.x
++        val newY = if (previousBounds.y == 0f) 0f else (oldY / previousBounds.y) * bounds.y
+         val newTarget = calculateTargetPosition(
+           currentPosition = Offset(newX, newY),
+           velocity = ExpoVelocityTracker.PointF(0f, 0f),
