@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Modal,
   AppState,
@@ -23,14 +23,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAudioPlayer, type AudioPlayer } from "expo-audio";
 import ExpoPip from "expo-pip";
-import * as Notifications from "expo-notifications";
 
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 
 import { RestTimer } from "@/components/rest-timer";
+import { RoutineSaveDialog } from "@/components/routine-save-dialog";
+import { RoutineSidebar } from "@/components/routine-sidebar";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { TodayPlanCard } from "@/components/today-plan-card";
 import { Button } from "@/components/ui/button";
 import {
   MaxContentWidth,
@@ -41,8 +41,8 @@ import {
 import { useWorkout } from "@/context/workout-context";
 import { useRestTimer, openNotificationSettings, openExactAlarmSettings } from "@/hooks/use-rest-timer";
 import { useTheme } from "@/hooks/use-theme";
-import { mondayFirstIndex, type Routine } from "@/types/workout";
-import { localDateKey, formatTime } from "@/utils/format";
+import type { Routine } from "@/types/workout";
+import { formatTime } from "@/utils/format";
 
 type TrainScreenProps = {
   /** Overrides the top inset (safe area + web TopInset) when embedded below a header. */
@@ -55,7 +55,7 @@ const PIP_WIDTH = 150;
 const PIP_HEIGHT = 100;
 
 export function TrainScreen({ contentTopInset }: TrainScreenProps) {
-  const { routine, routines, schedule, dismissedPlanDate, dismissTodayPlan } = useWorkout();
+  const { routine } = useWorkout();
   const [sessionRoutine, setSessionRoutine] = useState<Routine>(routine);
   const [exerciseIndex, setExerciseIndex] = useState(0);
   const [completedSets, setCompletedSets] = useState(0);
@@ -63,7 +63,8 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
   const [restartModalVisible, setRestartModalVisible] = useState(false);
   const [undoModalVisible, setUndoModalVisible] = useState(false);
   const [forwardModalVisible, setForwardModalVisible] = useState(false);
-  const [loadedRoutineId, setLoadedRoutineId] = useState<string | null>(null);
+  const [sidebarVisible, setSidebarVisible] = useState(false);
+  const [saveVisible, setSaveVisible] = useState(false);
   const [exactAlarmHintDismissed, setExactAlarmHintDismissed] = useState(false);
   const restTimer = useRestTimer();
   const theme = useTheme();
@@ -120,19 +121,24 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
   const completedSetsTotal = completedSetsBefore + completedSets;
   const sessionProgress = totalSets > 0 ? completedSetsTotal / totalSets : 0;
 
-  const todayIndex = mondayFirstIndex(new Date().getDay());
-  const todayPlan = schedule[todayIndex];
-  const todayRoutineId = todayPlan?.events.find((event) => event.routineId)?.routineId ?? null;
-  const todayRoutineLoaded = todayRoutineId != null && loadedRoutineId === todayRoutineId;
 
+
+  const prevPhaseRef = useRef(restTimer.phase);
   useEffect(() => {
-    if (restTimer.phase === "finished") {
-      if (Platform.OS !== "web") {
-        Vibration.vibrate(400);
+    const prev = prevPhaseRef.current;
+    prevPhaseRef.current = restTimer.phase;
+    if (prev !== "finished" && restTimer.phase === "finished") {
+      const endTime = restTimer.endTime;
+      const justFinished = endTime != null && Date.now() - endTime < 1500;
+      const noSystemAlert = restTimer.notificationPermission === false;
+      if (justFinished || noSystemAlert) {
+        if (Platform.OS !== "web") {
+          Vibration.vibrate(400);
+        }
+        playBeep(restFinishSound);
       }
-      playBeep(restFinishSound);
     }
-  }, [restTimer.phase, restFinishSound]);
+  }, [restTimer.phase, restTimer.endTime, restTimer.notificationPermission, restFinishSound]);
 
   const stopRestTimer = restTimer.stop;
 
@@ -141,58 +147,8 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
     setExerciseIndex(0);
     setCompletedSets(0);
     setDone(false);
-    setLoadedRoutineId(null);
     stopRestTimer();
   }, [routine, stopRestTimer]);
-
-  const loadTodayRoutine = useCallback(() => {
-    const todayIndex = mondayFirstIndex(new Date().getDay());
-    const todayPlan = schedule[todayIndex];
-    const todayEvent = todayPlan?.events.find((event) => event.routineId);
-    if (!todayPlan || todayPlan.isRest || !todayEvent?.routineId) return;
-    const saved = routines.find((item) => item.id === todayEvent.routineId);
-    if (!saved) return;
-    setSessionRoutine({
-      name: saved.name,
-      exercises: saved.exercises.map((exercise) => ({ ...exercise })),
-    });
-    setExerciseIndex(0);
-    setCompletedSets(0);
-    setDone(false);
-    setLoadedRoutineId(saved.id);
-    stopRestTimer();
-  }, [routines, schedule, stopRestTimer]);
-
-  const didAutoLoadRef = useRef(false);
-  useEffect(() => {
-    if (didAutoLoadRef.current) return;
-    didAutoLoadRef.current = true;
-    loadTodayRoutine();
-  }, [loadTodayRoutine]);
-
-  useEffect(() => {
-    if (Platform.OS === "web") return;
-    let active = true;
-    const onNotificationResponse = (response: Notifications.NotificationResponse) => {
-      if (response.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) return;
-      if (response.notification.request.content.data?.kind !== "agenda") return;
-      loadTodayRoutine();
-    };
-    Notifications.getLastNotificationResponseAsync()
-      .then((response) => {
-        if (active && response) onNotificationResponse(response);
-      })
-      .catch(() => {
-        // Ignore: no initial notification response available.
-      });
-    const subscription = Notifications.addNotificationResponseReceivedListener(
-      onNotificationResponse,
-    );
-    return () => {
-      active = false;
-      subscription.remove();
-    };
-  }, [loadTodayRoutine]);
 
   const completeSet = () => {
     if (exercise == null) return;
@@ -223,7 +179,6 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
     setExerciseIndex(0);
     setCompletedSets(0);
     setDone(false);
-    setLoadedRoutineId(null);
     restTimer.stop();
   };
 
@@ -381,15 +336,7 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
 
 
 
-  const todayPlanDismissed = dismissedPlanDate === localDateKey(new Date());
 
-  const todayPlanCard = todayPlanDismissed ? null : (
-    <TodayPlanCard
-      isLoaded={todayRoutineLoaded}
-      onLoadRoutine={loadTodayRoutine}
-      onDismiss={dismissTodayPlan}
-    />
-  );
 
   return (
     <Animated.View style={[styles.screen, screenBg]}>
@@ -404,15 +351,9 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
       >
         <View style={styles.container}>
           {done ? (
-            <>
-              {todayPlanCard}
-              <CompletionView totalSets={totalSets} onRestart={resetSession} />
-            </>
+            <CompletionView totalSets={totalSets} onRestart={resetSession} />
           ) : sessionRoutine.exercises.length === 0 ? (
-            <>
-              {todayPlanCard}
-              <EmptyView />
-            </>
+            <EmptyView />
           ) : (
             exercise != null && (
               <View style={styles.stack}>
@@ -442,12 +383,31 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
                       </ThemedText>
                     </Pressable>
                   </View>
-                  <ThemedText
-                    type="heading"
-                    style={{ color: resting ? theme.onAccent : theme.text }}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Elegir rutina"
+                    onPress={() => setSidebarVisible(true)}
+                    style={({ pressed }) => [
+                      styles.routineTitleButton,
+                      pressed && styles.pressed,
+                    ]}
                   >
-                    {sessionRoutine.name}
-                  </ThemedText>
+                    <ThemedText
+                      type="heading"
+                      numberOfLines={1}
+                      style={[
+                        styles.routineTitleText,
+                        { color: resting ? theme.onAccent : theme.text },
+                      ]}
+                    >
+                      {sessionRoutine.name}
+                    </ThemedText>
+                    <MaterialCommunityIcons
+                      name="chevron-down"
+                      size={22}
+                      color={resting ? theme.onAccent : theme.textSecondary}
+                    />
+                  </Pressable>
 
                   <View style={styles.progressRow}>
                     <View
@@ -484,7 +444,7 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
                   </View>
                 </View>
 
-                {todayPlanCard}
+
 
                 {restTimer.notificationPermission === false ? (
                   <Pressable
@@ -790,6 +750,18 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
           </ThemedView>
         </View>
       </Modal>
+      <RoutineSidebar
+        visible={sidebarVisible}
+        onClose={() => setSidebarVisible(false)}
+        onRequestSave={() => {
+          setSidebarVisible(false);
+          setSaveVisible(true);
+        }}
+      />
+      <RoutineSaveDialog
+        visible={saveVisible}
+        onClose={() => setSaveVisible(false)}
+      />
     </Animated.View>
   );
 }
@@ -931,6 +903,15 @@ const styles = StyleSheet.create({
   },
   headerRestartText: {
     color: "#F04438",
+  },
+  routineTitleButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.one,
+    alignSelf: "flex-start",
+  },
+  routineTitleText: {
+    flexShrink: 1,
   },
   pressed: {
     opacity: 0.6,

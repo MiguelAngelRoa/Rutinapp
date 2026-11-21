@@ -1,6 +1,7 @@
 'use client';
 
 import * as Notifications from 'expo-notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
@@ -9,6 +10,7 @@ import { useWorkout } from '@/context/workout-context';
 import { buildAgendaNotifications } from '@/notifications/agenda-notifications';
 
 const CHANNEL_ID = 'agenda';
+const PERMISSION_PROMPTED_KEY = 'rutinapp:notifications-permission-prompted:v1';
 
 // Set the global notification handler once at module load. It must never be
 // cleared: if no handler is set, expo-notifications silently drops
@@ -67,7 +69,7 @@ export function useAgendaNotifications() {
 
     // Create the channel before asking for permission: Android 13+ only shows
     // the notification prompt once at least one channel exists.
-    const request = async () => {
+    const requestOnce = async () => {
       try {
         await ensureChannel();
         const permission = await Notifications.getPermissionsAsync();
@@ -75,11 +77,15 @@ export function useAgendaNotifications() {
           console.log('[notifications] permission:', permission.status, 'granted=', permission.granted);
         }
         if (permission.status === 'undetermined') {
-          const result = await Notifications.requestPermissionsAsync({
-            ios: { allowAlert: true, allowBadge: true, allowSound: true },
-          });
-          if (__DEV__) {
-            console.log('[notifications] permission after request:', result.status, 'granted=', result.granted);
+          const prompted = await AsyncStorage.getItem(PERMISSION_PROMPTED_KEY);
+          if (!prompted) {
+            const result = await Notifications.requestPermissionsAsync({
+              ios: { allowAlert: true, allowBadge: true, allowSound: true },
+            });
+            await AsyncStorage.setItem(PERMISSION_PROMPTED_KEY, '1');
+            if (__DEV__) {
+              console.log('[notifications] permission after request:', result.status, 'granted=', result.granted);
+            }
           }
         }
       } catch (error) {
@@ -89,7 +95,7 @@ export function useAgendaNotifications() {
         }
       }
     };
-    request();
+    requestOnce();
   }, []);
 
   useEffect(() => {
@@ -131,12 +137,7 @@ export function useAgendaNotifications() {
         if (plans.length === 0) return;
 
         await ensureChannel();
-        let permission = await Notifications.getPermissionsAsync();
-        if (permission.status === 'undetermined') {
-          permission = await Notifications.requestPermissionsAsync({
-            ios: { allowAlert: true, allowBadge: true, allowSound: true },
-          });
-        }
+        const permission = await Notifications.getPermissionsAsync();
         if (__DEV__) {
           console.log('[notifications] scheduling, permission:', permission.status, 'granted=', permission.granted);
         }

@@ -24,14 +24,8 @@ function canPresent(permission: Notifications.NotificationPermissionsStatus): bo
   );
 }
 
-async function ensurePermission(): Promise<boolean> {
-  let permission = await Notifications.getPermissionsAsync();
-  if (!canPresent(permission) && permission.status !== 'denied') {
-    await ensureRestChannel();
-    permission = await Notifications.requestPermissionsAsync({
-      ios: { allowAlert: true, allowBadge: true, allowSound: true },
-    });
-  }
+async function canUseNotifications(): Promise<boolean> {
+  const permission = await Notifications.getPermissionsAsync();
   return canPresent(permission);
 }
 
@@ -65,7 +59,14 @@ export function useRestTimer() {
 
   const requestNotificationPermission = useCallback(async () => {
     if (Platform.OS === 'web') return false;
-    const granted = await ensurePermission();
+    let permission = await Notifications.getPermissionsAsync();
+    if (!canPresent(permission)) {
+      await ensureRestChannel();
+      permission = await Notifications.requestPermissionsAsync({
+        ios: { allowAlert: true, allowBadge: true, allowSound: true },
+      });
+    }
+    const granted = canPresent(permission);
     setNotificationPermission(granted);
     return granted;
   }, []);
@@ -102,7 +103,7 @@ export function useRestTimer() {
     async (target: Date, token: number) => {
       if (Platform.OS === 'web') return;
       try {
-        if (!(await ensurePermission())) {
+        if (!(await canUseNotifications())) {
           if (__DEV__) {
             console.warn('[notifications] rest: no permission');
           }
@@ -146,7 +147,7 @@ export function useRestTimer() {
   const triggerRestFinishedNotification = useCallback(async () => {
     if (Platform.OS === 'web') return;
     try {
-      if (!(await ensurePermission())) {
+      if (!(await canUseNotifications())) {
         if (__DEV__) {
           console.warn('[notifications] rest finish: no permission');
         }
