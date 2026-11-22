@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import Animated, {
   useAnimatedRef,
+  useAnimatedScrollHandler,
   useSharedValue,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -59,6 +60,12 @@ export function RoutineProgramScreen({ contentTopInset }: RoutineProgramScreenPr
   const scrollContentHeight = useSharedValue(0);
   const scrollWindowTop = useSharedValue(0);
 
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollOffset.value = event.contentOffset.y;
+    },
+  });
+
   const totalSets = routine.exercises.reduce(
     (sum, exercise) => sum + exercise.sets,
     0,
@@ -74,7 +81,8 @@ export function RoutineProgramScreen({ contentTopInset }: RoutineProgramScreenPr
       <Animated.ScrollView
         ref={scrollRef}
         scrollEnabled={scrollEnabled}
-        scrollViewOffset={scrollOffset}
+        onScroll={scrollHandler}
+        scrollEventThrottle={16}
         onContentSizeChange={(_, height) => {
           scrollContentHeight.value = height;
         }}

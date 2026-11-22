@@ -21,6 +21,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAudioPlayer, type AudioPlayer } from "expo-audio";
 import ExpoPip from "expo-pip";
 
@@ -51,8 +52,9 @@ type TrainScreenProps = {
 
 const AnimatedTextInput = Animated.createAnimatedComponent(TextInput);
 
-const PIP_WIDTH = 150;
-const PIP_HEIGHT = 100;
+const PIP_WIDTH = 1;
+const PIP_HEIGHT = 1;
+const EXACT_ALARM_HINT_KEY = "rutinapp:exact-alarm-hint-dismissed:v1";
 
 export function TrainScreen({ contentTopInset }: TrainScreenProps) {
   const { routine } = useWorkout();
@@ -65,8 +67,19 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
   const [forwardModalVisible, setForwardModalVisible] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [saveVisible, setSaveVisible] = useState(false);
-  const [exactAlarmHintDismissed, setExactAlarmHintDismissed] = useState(false);
+  const [exactAlarmHintDismissed, setExactAlarmHintDismissed] = useState(true);
   const restTimer = useRestTimer();
+
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    AsyncStorage.getItem(EXACT_ALARM_HINT_KEY)
+      .then((value) => {
+        if (value !== "1") {
+          AsyncStorage.setItem(EXACT_ALARM_HINT_KEY, "1").catch(() => {});
+        }
+      })
+      .catch(() => {});
+  }, []);
   const theme = useTheme();
   const safeAreaInsets = useSafeAreaInsets();
 
@@ -130,15 +143,14 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
     if (prev !== "finished" && restTimer.phase === "finished") {
       const endTime = restTimer.endTime;
       const justFinished = endTime != null && Date.now() - endTime < 1500;
-      const noSystemAlert = restTimer.notificationPermission === false;
-      if (justFinished || noSystemAlert) {
+      if (justFinished && AppState.currentState === "active") {
         if (Platform.OS !== "web") {
           Vibration.vibrate(400);
         }
         playBeep(restFinishSound);
       }
     }
-  }, [restTimer.phase, restTimer.endTime, restTimer.notificationPermission, restFinishSound]);
+  }, [restTimer.phase, restTimer.endTime, restFinishSound]);
 
   const stopRestTimer = restTimer.stop;
 
@@ -262,6 +274,7 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
   }, [
     restTimer.endTime,
     restTimer.remainingSeconds,
+    pip.isInPipMode,
     pipEndTime,
     pipRemaining,
   ]);
@@ -273,8 +286,26 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
   }, false);
 
   useEffect(() => {
-    pipFrame.setActive(restTimer.phase === "resting");
-  }, [restTimer.phase, pipFrame]);
+    const active = restTimer.phase === "resting";
+    pipFrame.setActive(active);
+    if (!active) {
+      const end = pipEndTime.value;
+      pipRemaining.value =
+        end <= 0 ? 0 : Math.max(0, Math.ceil((end - Date.now()) / 1000));
+    }
+  }, [restTimer.phase, pipFrame, pipEndTime, pipRemaining]);
+
+  useEffect(() => {
+    if (!pip.isInPipMode) return;
+    const update = () => {
+      const end = pipEndTime.value;
+      pipRemaining.value =
+        end <= 0 ? 0 : Math.max(0, Math.ceil((end - Date.now()) / 1000));
+    };
+    update();
+    const id = setInterval(update, 500);
+    return () => clearInterval(id);
+  }, [pip.isInPipMode, pipEndTime, pipRemaining]);
 
   const pipClockProps = useAnimatedProps(() => {
     const total = pipRemaining.value;
@@ -318,9 +349,7 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
 
   if (pip.isInPipMode) {
     return (
-      <Animated.View
-        style={[styles.pipScreen, { backgroundColor: theme.background }]}
-      >
+      <Animated.View style={[styles.pipScreen, pipBgStyle]}>
         <Animated.View style={[styles.pipCard, pipBgStyle]}>
           <AnimatedTextInput
             editable={false}
@@ -480,6 +509,7 @@ export function TrainScreen({ contentTopInset }: TrainScreenProps) {
                     accessibilityLabel="Permitir alarmas exactas"
                     onPress={() => {
                       setExactAlarmHintDismissed(true);
+                      AsyncStorage.setItem(EXACT_ALARM_HINT_KEY, "1").catch(() => {});
                       openExactAlarmSettings();
                     }}
                     style={({ pressed }) => [
@@ -1035,14 +1065,11 @@ const styles = StyleSheet.create({
   },
   pipScreen: {
     flex: 1,
-    padding: 4,
   },
   pipCard: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 16,
-    overflow: "hidden",
   },
   pipTime: {
     color: "#000000",

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -86,11 +86,12 @@ export function SortableExerciseList({
   const settleTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    if (dragId.value !== '') return;
     const ids = exercises.map((exercise) => exercise.id);
     orderRef.current = ids;
     orderIds.value = ids.slice();
     rank.value = buildRank(ids);
-  }, [exercises, orderIds, rank]);
+  }, [exercises, orderIds, rank, dragId]);
 
   const clearSettleTimeout = () => {
     if (settleTimeout.current) {
@@ -99,18 +100,21 @@ export function SortableExerciseList({
     }
   };
 
-  const topOfJS = (index: number): number => {
-    let top = 0;
-    const heightsValue = heights.value;
-    const order = orderRef.current;
-    for (let i = 0; i < index; i++) {
-      top += (heightsValue[order[i]] ?? 0) + GAP;
-    }
-    return top;
+  const fallbackHeight = () => {
+    const values = Object.values(heights.value).filter((h) => h > 0);
+    if (values.length === 0) return 140;
+    return values.reduce((sum, h) => sum + h, 0) / values.length;
   };
 
-  const handleHeightMeasured = (id: string, height: number) => {
-    heights.value = { ...heights.value, [id]: height };
+  const topOfJS = (index: number): number => {
+    let top = 0;
+    const order = orderRef.current;
+    const fallback = fallbackHeight();
+    for (let i = 0; i < index; i++) {
+      const h = heights.value[order[i]] ?? 0;
+      top += (h > 0 ? h : fallback) + GAP;
+    }
+    return top;
   };
 
   const resetDragState = () => {
@@ -194,10 +198,52 @@ export function SortableExerciseList({
   };
 
   const handleHoldEnd = (id: string) => {
-    if (activeId === id) {
+    if (dragId.value === id || pendingHold.value === id || activeId === id) {
       resetDragState();
     }
   };
+
+  const internalRef = useRef({
+    handleHoldBegin: (_id: string, _index: number) => {},
+    handleHoldEnd: (_id: string) => {},
+    onMoveRequest: (_to: number) => {},
+    onRelease: (_id: string) => {},
+    onCancel: (_id: string) => {},
+  });
+  internalRef.current.handleHoldBegin = handleHoldBegin;
+  internalRef.current.handleHoldEnd = handleHoldEnd;
+  internalRef.current.onMoveRequest = onMoveRequest;
+  internalRef.current.onRelease = releaseDrag;
+  internalRef.current.onCancel = cancelDrag;
+
+  const stableOnHoldBegin = useCallback((id: string, index: number) => {
+    internalRef.current.handleHoldBegin(id, index);
+  }, []);
+  const stableOnHoldEnd = useCallback((id: string) => {
+    internalRef.current.handleHoldEnd(id);
+  }, []);
+  const stableOnMoveRequest = useCallback((to: number) => {
+    internalRef.current.onMoveRequest(to);
+  }, []);
+  const stableOnRelease = useCallback((id: string) => {
+    internalRef.current.onRelease(id);
+  }, []);
+  const stableOnCancel = useCallback((id: string) => {
+    internalRef.current.onCancel(id);
+  }, []);
+
+  const scrollEnabledPropRef = useRef(onScrollEnabledChange);
+  scrollEnabledPropRef.current = onScrollEnabledChange;
+  const stableOnScrollEnabledChange = useCallback((enabled: boolean) => {
+    scrollEnabledPropRef.current(enabled);
+  }, []);
+
+  const stableOnHeightMeasured = useCallback(
+    (id: string, height: number) => {
+      heights.value = { ...heights.value, [id]: height };
+    },
+    [heights],
+  );
 
   const overlayStyle = useAnimatedStyle(() => ({
     top: overlayBase.value + dragY.value,
@@ -236,13 +282,13 @@ export function SortableExerciseList({
           scrollWindowTop={scrollWindowTop}
           scrollContentHeight={scrollContentHeight}
           isDragged={activeId === exercise.id}
-          onHoldBegin={handleHoldBegin}
-          onHoldEnd={handleHoldEnd}
-          onMoveRequest={onMoveRequest}
-          onRelease={releaseDrag}
-          onCancel={cancelDrag}
-          onScrollEnabledChange={onScrollEnabledChange}
-          onHeightMeasured={handleHeightMeasured}
+          onHoldBegin={stableOnHoldBegin}
+          onHoldEnd={stableOnHoldEnd}
+          onMoveRequest={stableOnMoveRequest}
+          onRelease={stableOnRelease}
+          onCancel={stableOnCancel}
+          onScrollEnabledChange={stableOnScrollEnabledChange}
+          onHeightMeasured={stableOnHeightMeasured}
         >
           {renderItem(exercise, activeId === exercise.id)}
         </SortableItem>
@@ -317,84 +363,113 @@ function SortableItem({
   onHeightMeasured,
   children,
 }: SortableItemProps) {
-  const gesture = Gesture.Pan()
-    .activateAfterLongPress(LONG_PRESS_MS)
-    .onStart(() => {
-      const from = rank.value[id] ?? -1;
-      if (from < 0) return;
-      pendingHold.value = id;
-      releaseHandled.value = 0;
-      const metrics = measure(scrollRef);
-      if (metrics) {
-        scrollWindowTop.value = metrics.pageY;
-        if (metrics.height > 0) scrollViewportHeight.value = metrics.height;
-      }
-      // Anchor the (invisible) overlay onto this card's slot right away.
-      overlayBase.value = topOfWorklet(heights, orderIds, from);
-      dragY.value = 0;
-      gapIndex.value = from;
-      overlayOpacity.value = 0;
-      runOnJS(onHoldBegin)(id, from);
-      runOnJS(onScrollEnabledChange)(false);
-    })
-    .onUpdate((event) => {
-      if (dragId.value === id) {
-        runLiftedUpdate({
-          event,
-          heights,
-          orderIds,
-          rank,
-          dragY,
-          overlayBase,
-          lastTranslationY,
-          gapIndex,
-          scrollRef,
-          scrollOffset,
-          scrollViewportHeight,
-          scrollWindowTop,
-          scrollContentHeight,
-          id,
-          onMoveRequest,
-        });
-        return;
-      }
+  const gesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .activateAfterLongPress(LONG_PRESS_MS)
+        .onStart(() => {
+          const from = rank.value[id] ?? -1;
+          if (from < 0) return;
+          pendingHold.value = id;
+          releaseHandled.value = 0;
+          const metrics = measure(scrollRef);
+          if (metrics) {
+            scrollWindowTop.value = metrics.pageY;
+            if (metrics.height > 0) scrollViewportHeight.value = metrics.height;
+          }
+          // Anchor the (invisible) overlay onto this card's slot right away.
+          overlayBase.value = topOfWorklet(heights, orderIds, from);
+          dragY.value = 0;
+          gapIndex.value = from;
+          overlayOpacity.value = 0;
+          runOnJS(onHoldBegin)(id, from);
+          runOnJS(onScrollEnabledChange)(false);
+        })
+        .onUpdate((event) => {
+          if (dragId.value === id) {
+            runLiftedUpdate({
+              event,
+              heights,
+              orderIds,
+              rank,
+              dragY,
+              overlayBase,
+              lastTranslationY,
+              gapIndex,
+              scrollRef,
+              scrollOffset,
+              scrollViewportHeight,
+              scrollWindowTop,
+              scrollContentHeight,
+              id,
+              onMoveRequest,
+            });
+            return;
+          }
 
-      // Hold phase: the finger may rest or micro-move; keep the real card in
-      // place showing just the accent border focus.
-      if (Math.abs(event.translationY) < LIFT_THRESHOLD) return;
-      const from = rank.value[id] ?? -1;
-      if (from < 0) return;
+          // Hold phase: the finger may rest or micro-move; keep the real card in
+          // place showing just the accent border focus.
+          if (Math.abs(event.translationY) < LIFT_THRESHOLD) return;
+          const from = rank.value[id] ?? -1;
+          if (from < 0) return;
 
-      // Lift entirely on the UI thread: hide the real card, reveal the overlay
-      // that was already mounted (invisible) over this slot, and snap it onto
-      // the finger immediately — no JS round-trip, no delay.
-      dragId.value = id;
-      overlayOpacity.value = 1;
-      lastTranslationY.value = event.translationY;
-      dragY.value = event.translationY;
-      gapIndex.value = from;
-    })
-    .onEnd((_, success) => {
-      if (dragId.value === id) {
-        releaseHandled.value = 1;
-        if (!success) {
-          runOnJS(onCancel)(id);
-          return;
-        }
-        runOnJS(onRelease)(id);
-        return;
-      }
-      if (pendingHold.value === id) {
-        runOnJS(onHoldEnd)(id);
-      }
-    })
-    .onFinalize(() => {
-      if (dragId.value === id && releaseHandled.value === 0) {
-        runOnJS(onCancel)(id);
-      } else if (pendingHold.value === id && dragId.value !== id) {
-        runOnJS(onHoldEnd)(id);
-      }
-    });
+          // Lift entirely on the UI thread: hide the real card, reveal the overlay
+          // that was already mounted (invisible) over this slot, and snap it onto
+          // the finger immediately — no JS round-trip, no delay.
+          overlayBase.value = topOfWorklet(heights, orderIds, from);
+          dragId.value = id;
+          overlayOpacity.value = 1;
+          lastTranslationY.value = event.translationY;
+          dragY.value = event.translationY;
+          gapIndex.value = from;
+        })
+        .onEnd((_, success) => {
+          if (dragId.value === id) {
+            releaseHandled.value = 1;
+            if (!success) {
+              runOnJS(onCancel)(id);
+              return;
+            }
+            runOnJS(onRelease)(id);
+            return;
+          }
+          if (pendingHold.value === id) {
+            runOnJS(onHoldEnd)(id);
+          }
+        })
+        .onFinalize(() => {
+          if (dragId.value === id && releaseHandled.value === 0) {
+            runOnJS(onCancel)(id);
+          } else if (pendingHold.value === id && dragId.value !== id) {
+            runOnJS(onHoldEnd)(id);
+          }
+        }),
+    [
+      id,
+      heights,
+      orderIds,
+      rank,
+      dragId,
+      pendingHold,
+      dragY,
+      overlayBase,
+      overlayOpacity,
+      lastTranslationY,
+      gapIndex,
+      releaseHandled,
+      scrollRef,
+      scrollOffset,
+      scrollViewportHeight,
+      scrollWindowTop,
+      scrollContentHeight,
+      onHoldBegin,
+      onHoldEnd,
+      onMoveRequest,
+      onRelease,
+      onCancel,
+      onScrollEnabledChange,
+    ],
+  );
 
   const animatedStyle = useAnimatedStyle(() => {
     if (dragId.value === id) {
@@ -471,17 +546,32 @@ function runLiftedUpdate(params: {
   dragY.value = dragY.value + delta;
 
   // The floating card's center in content coordinates.
-  const dragHeight = heights.value[id] ?? 0;
+  const ids = orderIds.value;
+  let fallback = 140;
+  let sumH = 0;
+  let countH = 0;
+  for (let i = 0; i < ids.length; i++) {
+    const hh = heights.value[ids[i]] ?? 0;
+    if (hh > 0) {
+      sumH += hh;
+      countH++;
+    }
+  }
+  if (countH > 0) fallback = sumH / countH;
+
+  const dragH = heights.value[id] ?? 0;
+  const dragHeight = dragH > 0 ? dragH : fallback;
   const mid = overlayBase.value + dragY.value + (dragHeight + GAP) / 2;
 
-  const n = orderIds.value.length;
+  const n = ids.length;
   if (n > 0) {
     const current = gapIndex.value;
     let best = current >= 0 && current < n ? current : from;
     let bestDistance = Infinity;
     let cum = 0;
     for (let i = 0; i < n; i++) {
-      const step = (heights.value[orderIds.value[i]] ?? 0) + GAP;
+      const h = heights.value[ids[i]] ?? 0;
+      const step = (h > 0 ? h : fallback) + GAP;
       const center = cum + step / 2;
       let distance = Math.abs(mid - center);
       if (i === best) distance -= GAP_HYSTERESIS;
@@ -544,9 +634,23 @@ function topOfWorklet(
   index: number,
 ): number {
   'worklet';
+  const ids = orderIds.value;
+  let fallback = 140;
+  let sum = 0;
+  let count = 0;
+  for (let i = 0; i < ids.length; i++) {
+    const hh = heights.value[ids[i]] ?? 0;
+    if (hh > 0) {
+      sum += hh;
+      count++;
+    }
+  }
+  if (count > 0) fallback = sum / count;
+
   let top = 0;
   for (let i = 0; i < index; i++) {
-    top += (heights.value[orderIds.value[i]] ?? 0) + GAP;
+    const h = heights.value[ids[i]] ?? 0;
+    top += (h > 0 ? h : fallback) + GAP;
   }
   return top;
 }

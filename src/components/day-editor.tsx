@@ -11,7 +11,12 @@ import {
   type GestureResponderEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import Animated, {
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { ActivityPicker } from '@/components/activity-picker';
 import { RoutinePicker } from '@/components/routine-picker';
@@ -73,7 +78,6 @@ export function DayEditor({ visible, dayIndex, onClose }: DayEditorProps) {
   const [runKmDraft, setRunKmDraft] = useState('');
   const [selectionActive, setSelectionActive] = useState(false);
   const [pressedHour, setPressedHour] = useState<number | null>(null);
-  const [debugText, setDebugText] = useState('');
   const selectionRef = useRef(false);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const armedRef = useRef(false);
@@ -82,6 +86,7 @@ export function DayEditor({ visible, dayIndex, onClose }: DayEditorProps) {
   const selectionStartHour = useRef<number | null>(null);
   const bandTop = useSharedValue(0);
   const bandHeight = useSharedValue(0);
+  const armingProgress = useSharedValue(0);
   const gridBodyRef = useRef<View>(null);
   const gridBodyWindowY = useRef(0);
 
@@ -105,6 +110,7 @@ export function DayEditor({ visible, dayIndex, onClose }: DayEditorProps) {
 
   const finishSelection = (from: number, to: number, startRow: number) => {
     endSelection();
+    stopArming();
     const existing = day.events.find((event) => hourInSpan(event, startRow));
     if (existing) {
       setDraft({
@@ -124,20 +130,40 @@ export function DayEditor({ visible, dayIndex, onClose }: DayEditorProps) {
     }
   };
 
+  const stopArming = () => {
+    armingProgress.value = 0;
+  };
+
+  const showArmingAtRow = (row: number) => {
+    bandTop.value = row * ROW_HEIGHT;
+    bandHeight.value = ROW_HEIGHT;
+  };
+
   const onGridTouchStart = (e: GestureResponderEvent) => {
     clearLongPressTimer();
     armedRef.current = false;
-    touchStartY.current = e.nativeEvent.locationY;
+    const pageY = e.nativeEvent.pageY;
+    touchStartY.current = pageY;
     touchMoved.current = 0;
     gridBodyRef.current?.measureInWindow((_x, y) => {
       gridBodyWindowY.current = y;
+      const row = clampHour(Math.floor((pageY - y) / ROW_HEIGHT));
+      if (!selectionRef.current) showArmingAtRow(row);
     });
+    const fallbackRow = clampHour(Math.floor(e.nativeEvent.locationY / ROW_HEIGHT));
+    showArmingAtRow(fallbackRow);
+    armingProgress.value = 0;
+    armingProgress.value = withTiming(1, { duration: LONG_PRESS_MS });
     longPressTimer.current = setTimeout(() => {
       longPressTimer.current = null;
       if (touchMoved.current <= TOUCH_SLOP) {
         armedRef.current = true;
         setSelectionActive(true);
-        setDebugText('armado');
+        armingProgress.value = 1;
+      } else {
+        stopArming();
+        bandTop.value = 0;
+        bandHeight.value = 0;
       }
     }, LONG_PRESS_MS);
   };
@@ -145,16 +171,31 @@ export function DayEditor({ visible, dayIndex, onClose }: DayEditorProps) {
   const onGridTouchMove = (e: GestureResponderEvent) => {
     touchMoved.current = Math.max(
       touchMoved.current,
-      Math.abs(e.nativeEvent.locationY - touchStartY.current),
+      Math.abs(e.nativeEvent.pageY - touchStartY.current),
     );
+    if (touchMoved.current > TOUCH_SLOP && !selectionRef.current) {
+      clearLongPressTimer();
+      armedRef.current = false;
+      stopArming();
+      bandTop.value = 0;
+      bandHeight.value = 0;
+    }
   };
 
   const onGridTouchEnd = () => {
     clearLongPressTimer();
     if (armedRef.current) {
       armedRef.current = false;
-      if (!selectionRef.current) endSelection();
+      if (!selectionRef.current) {
+        endSelection();
+        bandTop.value = 0;
+        bandHeight.value = 0;
+      }
+    } else {
+      bandTop.value = 0;
+      bandHeight.value = 0;
     }
+    stopArming();
   };
 
   const onGridMoveShouldSetResponder = () => armedRef.current;
@@ -164,16 +205,12 @@ export function DayEditor({ visible, dayIndex, onClose }: DayEditorProps) {
 
   const onGridResponderGrant = (e: GestureResponderEvent) => {
     clearLongPressTimer();
+    stopArming();
     const row = rowFromPageY(e.nativeEvent.pageY);
     selectionStartHour.current = row;
     bandTop.value = row * ROW_HEIGHT;
     bandHeight.value = ROW_HEIGHT;
     beginSelection();
-    setDebugText(
-      `start row=${row} pageY=${Math.round(e.nativeEvent.pageY)} winY=${Math.round(
-        gridBodyWindowY.current,
-      )}`,
-    );
   };
 
   const onGridResponderMove = (e: GestureResponderEvent) => {
@@ -183,12 +220,12 @@ export function DayEditor({ visible, dayIndex, onClose }: DayEditorProps) {
     const to = Math.max(start, current);
     bandTop.value = from * ROW_HEIGHT;
     bandHeight.value = (to - from + 1) * ROW_HEIGHT;
-    setDebugText(`move row=${current} from=${from} to=${to}`);
   };
 
   const onGridResponderRelease = (e: GestureResponderEvent) => {
     clearLongPressTimer();
     armedRef.current = false;
+    stopArming();
     const start = selectionStartHour.current;
     selectionStartHour.current = null;
     if (start == null) return;
@@ -198,23 +235,29 @@ export function DayEditor({ visible, dayIndex, onClose }: DayEditorProps) {
     bandTop.value = 0;
     bandHeight.value = 0;
     finishSelection(from, to, start);
-    setDebugText(`release from=${from} to=${to}`);
   };
 
   const onGridResponderTerminate = () => {
     clearLongPressTimer();
     armedRef.current = false;
+    stopArming();
     selectionStartHour.current = null;
     bandTop.value = 0;
     bandHeight.value = 0;
     endSelection();
-    setDebugText('cancelado');
   };
+
+  const onGridResponderTerminationRequest = () => !selectionRef.current;
 
   const bandStyle = useAnimatedStyle(() => ({
     top: bandTop.value,
     height: bandHeight.value,
     opacity: bandHeight.value > 0 ? 1 : 0,
+    backgroundColor: interpolateColor(
+      armingProgress.value,
+      [0, 1],
+      ['rgba(163, 230, 53, 0.20)', 'rgba(163, 230, 53, 0.52)'],
+    ),
   }));
 
   const handleRowPress = (hour: number) => {
@@ -330,14 +373,16 @@ export function DayEditor({ visible, dayIndex, onClose }: DayEditorProps) {
 
               {!day.isRest ? (
                 <View style={styles.schedule}>
-                  <ThemedText type="caps" themeColor="textSecondary" style={styles.scheduleLabel}>
-                    Toca una hora, o mantén presionado y arrastra para fijar la duración
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.scheduleLabel}>
+                    Mantén presionado y arrastra para elegir horas.
                   </ThemedText>
                   <View style={[styles.grid, { borderColor: theme.border }]}>
                     <View
                       ref={gridBodyRef}
                       style={styles.gridBody}
                       collapsable={false}
+                      onMoveShouldSetResponderCapture={() => armedRef.current || selectionRef.current}
+                      onResponderTerminationRequest={onGridResponderTerminationRequest}
                       onTouchStart={onGridTouchStart}
                       onTouchMove={onGridTouchMove}
                       onTouchEnd={onGridTouchEnd}
@@ -403,10 +448,7 @@ export function DayEditor({ visible, dayIndex, onClose }: DayEditorProps) {
                           style={[
                             styles.selectionBand,
                             bandStyle,
-                            {
-                              backgroundColor: "rgba(163, 230, 53, 0.35)",
-                              borderLeftColor: theme.accent,
-                            },
+                            { borderLeftColor: theme.accent },
                           ]}
                         />
 
@@ -458,12 +500,6 @@ export function DayEditor({ visible, dayIndex, onClose }: DayEditorProps) {
                 size="md"
                 onPress={() => resetDay(dayIndex)}
               />
-
-              {debugText ? (
-                <ThemedText type="small" themeColor="textSecondary" style={styles.debugText}>
-                  [sel] {debugText}
-                </ThemedText>
-              ) : null}
             </ScrollView>
 
             {draft && (
@@ -895,11 +931,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.two,
     fontSize: 16,
     textAlignVertical: 'top',
-  },
-  debugText: {
-    alignSelf: 'center',
-    marginTop: Spacing.two,
-    fontFamily: 'monospace',
   },
   pressed: {
     opacity: 0.6,
